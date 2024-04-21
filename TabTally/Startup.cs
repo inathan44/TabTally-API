@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 
 namespace Splyt
 {
@@ -14,8 +16,16 @@ namespace Splyt
             {
                 options.UseNpgsql(Environment.GetEnvironmentVariable("DATABASE_URL"));
             });
+            string? pathToFirebaseAdminSDKJson = Environment.GetEnvironmentVariable("PATH_TO_FIREBASE_JSON");
+            if (pathToFirebaseAdminSDKJson == null)
+            {
+                throw new Exception("PATH_TO_FIREBASE_JSON environment variable not set");
+            }
+            FirebaseApp.Create(new AppOptions()
+            {
+                Credential = GoogleCredential.FromFile(pathToFirebaseAdminSDKJson)
+            });
         }
-
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
@@ -27,6 +37,8 @@ namespace Splyt
             app.UseHttpsRedirection();
             app.UseRouting();
             app.UseAuthorization();
+
+            app.UseMiddleware<FirebaseAuthMiddleware>();
 
             app.UseEndpoints(endpoints =>
             {
