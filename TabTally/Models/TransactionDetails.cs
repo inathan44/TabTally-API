@@ -12,13 +12,13 @@ public class TransactionDetails
     public int TransactionId { get; set; }
 
     [Required]
-    public int PayerId { get; set; }
+    public string PayerId { get; set; }
 
     [ForeignKey("PayerId")]
     public virtual User? Payer { get; set; }
 
     [Required]
-    public int RecipientId { get; set; }
+    public string RecipientId { get; set; }
 
     [ForeignKey("RecipientId")]
     public virtual User? Recipient { get; set; }

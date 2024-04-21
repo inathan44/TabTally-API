@@ -10,13 +10,13 @@ public class Transaction
 
 
     [Required]
-    public int CreatedBy { get; set; }
+    public string CreatedBy { get; set; }
 
     [ForeignKey("CreatedBy")]
     public User? User { get; set; }
 
     [Required]
-    public int PayerId { get; set; }
+    public string PayerId { get; set; }
 
     [ForeignKey("PayerId")]
     public User? Payer { get; set; }

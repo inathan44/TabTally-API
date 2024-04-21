@@ -13,8 +13,11 @@ public class Group
     [MaxLength(50)]
     public string Name { get; set; }
 
+    [ForeignKey("CreatedBy")]
+    public User? User { get; set; }
+
     [Required]
-    public int CreatedBy { get; set; }
+    public string CreatedBy { get; set; }
 
     [MinLength(1)]
     [MaxLength(255)]

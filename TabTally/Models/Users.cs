@@ -3,9 +3,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 public class User
 {
     [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Required]
-    public int Id { get; set; }
+    public string Id { get; set; }
 
     [Required]
     [MinLength(3)]

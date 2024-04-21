@@ -9,14 +9,14 @@ public class GroupMembers
     [Required]
     public int Id { get; set; }
 
+    [ForeignKey("GroupId")]
+    public Group Group { get; set; }
     [Required]
     public int GroupId { get; set; }
 
-    [ForeignKey("GroupId")]
-    public Group Group { get; set; }
 
     [Required]
-    public int UserId { get; set; }
+    public string UserId { get; set; }
 
     [ForeignKey("UserId")]
     public User User { get; set; }
