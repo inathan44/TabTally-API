@@ -11,8 +11,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Splyt.Migrations
 {
     [DbContext(typeof(SplytContext))]
-    [Migration("20240415230359_RemoveTransactionFromTransactionDetails")]
-    partial class RemoveTransactionFromTransactionDetails
+    [Migration("20240421032848_GroupFK")]
+    partial class GroupFK
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -35,8 +35,9 @@ namespace Splyt.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("CreatedBy")
-                        .HasColumnType("integer");
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Description")
                         .HasMaxLength(255)
@@ -52,17 +53,9 @@ namespace Splyt.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Group");
+                    b.HasIndex("CreatedBy");
 
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            CreatedAt = new DateTime(2024, 4, 15, 23, 3, 59, 641, DateTimeKind.Utc).AddTicks(3850),
-                            CreatedBy = 1,
-                            Name = "Whistler Wankers",
-                            UpdatedAt = new DateTime(2024, 4, 15, 23, 3, 59, 641, DateTimeKind.Utc).AddTicks(3850)
-                        });
+                    b.ToTable("Group");
                 });
 
             modelBuilder.Entity("GroupMembers", b =>
@@ -85,8 +78,9 @@ namespace Splyt.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -111,8 +105,9 @@ namespace Splyt.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("CreatedBy")
-                        .HasColumnType("integer");
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Description")
                         .HasMaxLength(255)
@@ -121,8 +116,9 @@ namespace Splyt.Migrations
                     b.Property<int>("GroupId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("PayerId")
-                        .HasColumnType("integer");
+                    b.Property<string>("PayerId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -152,11 +148,13 @@ namespace Splyt.Migrations
                     b.Property<int>("GroupId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("PayerId")
-                        .HasColumnType("integer");
+                    b.Property<string>("PayerId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.Property<int>("RecipientId")
-                        .HasColumnType("integer");
+                    b.Property<string>("RecipientId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("TransactionId")
                         .HasColumnType("integer");
@@ -176,11 +174,8 @@ namespace Splyt.Migrations
 
             modelBuilder.Entity("User", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -208,28 +203,17 @@ namespace Splyt.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("User");
+                });
 
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            CreatedAt = new DateTime(2024, 4, 15, 23, 3, 59, 641, DateTimeKind.Utc).AddTicks(3760),
-                            Email = "user1@example.com",
-                            FirstName = "test",
-                            LastName = "user",
-                            UpdatedAt = new DateTime(2024, 4, 15, 23, 3, 59, 641, DateTimeKind.Utc).AddTicks(3760),
-                            Username = "inathan44"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            CreatedAt = new DateTime(2024, 4, 15, 23, 3, 59, 641, DateTimeKind.Utc).AddTicks(3760),
-                            Email = "getAWP",
-                            FirstName = "John",
-                            LastName = "Doe",
-                            UpdatedAt = new DateTime(2024, 4, 15, 23, 3, 59, 641, DateTimeKind.Utc).AddTicks(3760),
-                            Username = "johndoe"
-                        });
+            modelBuilder.Entity("Group", b =>
+                {
+                    b.HasOne("User", "User")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("GroupMembers", b =>

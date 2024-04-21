@@ -1,9 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
-
-#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
 
 namespace Splyt.Migrations
 {
@@ -34,8 +33,7 @@ namespace Splyt.Migrations
                 name: "User",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Id = table.Column<string>(type: "text", nullable: false),
                     Username = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     Email = table.Column<string>(type: "text", nullable: false),
                     FirstName = table.Column<string>(type: "text", nullable: false),
@@ -55,7 +53,7 @@ namespace Splyt.Migrations
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     GroupId = table.Column<int>(type: "integer", nullable: false),
-                    UserId = table.Column<int>(type: "integer", nullable: false),
+                    UserId = table.Column<string>(type: "text", nullable: false),
                     IsAdmin = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
@@ -83,8 +81,8 @@ namespace Splyt.Migrations
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    CreatedBy = table.Column<int>(type: "integer", nullable: false),
-                    PayerId = table.Column<int>(type: "integer", nullable: false),
+                    CreatedBy = table.Column<string>(type: "text", nullable: false),
+                    PayerId = table.Column<string>(type: "text", nullable: false),
                     Amount = table.Column<decimal>(type: "numeric", nullable: false),
                     Description = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -121,8 +119,8 @@ namespace Splyt.Migrations
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     TransactionId = table.Column<int>(type: "integer", nullable: false),
-                    PayerId = table.Column<int>(type: "integer", nullable: false),
-                    RecipientId = table.Column<int>(type: "integer", nullable: false),
+                    PayerId = table.Column<string>(type: "text", nullable: false),
+                    RecipientId = table.Column<string>(type: "text", nullable: false),
                     GroupId = table.Column<int>(type: "integer", nullable: false),
                     Amount = table.Column<decimal>(type: "numeric", nullable: false)
                 },
@@ -158,16 +156,7 @@ namespace Splyt.Migrations
             migrationBuilder.InsertData(
                 table: "Group",
                 columns: new[] { "Id", "CreatedAt", "CreatedBy", "Description", "Name", "UpdatedAt" },
-                values: new object[] { 1, new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2360), 1, null, "Whistler Wankers", new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2360) });
-
-            migrationBuilder.InsertData(
-                table: "User",
-                columns: new[] { "Id", "CreatedAt", "Email", "FirstName", "LastName", "UpdatedAt", "Username" },
-                values: new object[,]
-                {
-                    { 1, new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2260), "user1@example.com", "test", "user", new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2260), "inathan44" },
-                    { 2, new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2260), "getAWP", "John", "Doe", new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2260), "johndoe" }
-                });
+                values: new object[] { 1, new DateTime(2024, 4, 21, 3, 17, 4, 345, DateTimeKind.Utc).AddTicks(9710), 1, null, "Whistler Wankers", new DateTime(2024, 4, 21, 3, 17, 4, 345, DateTimeKind.Utc).AddTicks(9710) });
 
             migrationBuilder.CreateIndex(
                 name: "IX_GroupMembers_GroupId",

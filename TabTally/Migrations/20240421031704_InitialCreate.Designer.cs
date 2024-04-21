@@ -11,7 +11,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Splyt.Migrations
 {
     [DbContext(typeof(SplytContext))]
-    [Migration("20240415224739_InitialCreate")]
+    [Migration("20240421031704_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -58,10 +58,10 @@ namespace Splyt.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2360),
+                            CreatedAt = new DateTime(2024, 4, 21, 3, 17, 4, 345, DateTimeKind.Utc).AddTicks(9710),
                             CreatedBy = 1,
                             Name = "Whistler Wankers",
-                            UpdatedAt = new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2360)
+                            UpdatedAt = new DateTime(2024, 4, 21, 3, 17, 4, 345, DateTimeKind.Utc).AddTicks(9710)
                         });
                 });
 
@@ -85,8 +85,9 @@ namespace Splyt.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -111,8 +112,9 @@ namespace Splyt.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("CreatedBy")
-                        .HasColumnType("integer");
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Description")
                         .HasMaxLength(255)
@@ -121,8 +123,9 @@ namespace Splyt.Migrations
                     b.Property<int>("GroupId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("PayerId")
-                        .HasColumnType("integer");
+                    b.Property<string>("PayerId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -152,11 +155,13 @@ namespace Splyt.Migrations
                     b.Property<int>("GroupId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("PayerId")
-                        .HasColumnType("integer");
+                    b.Property<string>("PayerId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.Property<int>("RecipientId")
-                        .HasColumnType("integer");
+                    b.Property<string>("RecipientId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("TransactionId")
                         .HasColumnType("integer");
@@ -176,11 +181,8 @@ namespace Splyt.Migrations
 
             modelBuilder.Entity("User", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -208,28 +210,6 @@ namespace Splyt.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("User");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            CreatedAt = new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2260),
-                            Email = "user1@example.com",
-                            FirstName = "test",
-                            LastName = "user",
-                            UpdatedAt = new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2260),
-                            Username = "inathan44"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            CreatedAt = new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2260),
-                            Email = "getAWP",
-                            FirstName = "John",
-                            LastName = "Doe",
-                            UpdatedAt = new DateTime(2024, 4, 15, 22, 47, 39, 429, DateTimeKind.Utc).AddTicks(2260),
-                            Username = "johndoe"
-                        });
                 });
 
             modelBuilder.Entity("GroupMembers", b =>
@@ -298,7 +278,7 @@ namespace Splyt.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Transaction", "Transaction")
+                    b.HasOne("Transaction", null)
                         .WithMany("TransactionDetails")
                         .HasForeignKey("TransactionId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -309,8 +289,6 @@ namespace Splyt.Migrations
                     b.Navigation("Payer");
 
                     b.Navigation("Recipient");
-
-                    b.Navigation("Transaction");
                 });
 
             modelBuilder.Entity("Group", b =>
