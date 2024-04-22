@@ -39,6 +39,7 @@ namespace Splyt
             app.UseAuthorization();
 
             app.UseMiddleware<FirebaseAuthMiddleware>();
+            app.UseMiddleware<FindOrCreateUserMiddleware>();
 
             app.UseEndpoints(endpoints =>
             {

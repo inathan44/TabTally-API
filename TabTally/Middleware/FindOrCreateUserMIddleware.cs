@@ -3,36 +3,43 @@ using Microsoft.EntityFrameworkCore;
 public class FindOrCreateUserMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly SplytContext _context;
 
-    public FindOrCreateUserMiddleware(RequestDelegate next, SplytContext context)
+    public FindOrCreateUserMiddleware(RequestDelegate next)
     {
         _next = next;
-        _context = context;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext httpContext)
     {
-        if (context.Items.TryGetValue("FirebaseUserId", out var firebaseUserId))
+        var dbContext = httpContext.RequestServices.GetRequiredService<SplytContext>();
+        if (httpContext.Items.TryGetValue("FirebaseUserId", out var firebaseUserId))
             if (firebaseUserId != null)
             {
+                string firebaseUserIdString = firebaseUserId.ToString() ?? "";
                 {
-                    // Because of check, we know the below variable is not null
-                    string firebaseUserIdString = firebaseUserId.ToString() ?? "";
-                    var user = await _context.User.FirstOrDefaultAsync(u => u.Id == firebaseUserIdString);
-                    if (user == null)
+                    try
                     {
-                        user = new User
+                        // Because of check, we know the below variable is not null
+                        var user = await dbContext.User.FirstOrDefaultAsync(u => u.Id == firebaseUserIdString);
+                        if (user == null)
                         {
-                            Id = firebaseUserIdString,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
-                        };
-                        _context.User.Add(user);
-                        await _context.SaveChangesAsync();
+                            user = new User
+                            {
+                                Id = firebaseUserIdString,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            dbContext.User.Add(user);
+                            await dbContext.SaveChangesAsync();
+                        }
+                        httpContext.Items.Add("User", user);
+                        await _next(httpContext);
                     }
-                    context.Items.Add("User", user);
-                    await _next(context);
+                    catch (Exception e)
+                    {
+                        httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                        await httpContext.Response.WriteAsync(e.Message);
+                    }
                 }
             }
     }
