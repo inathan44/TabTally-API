@@ -9,23 +9,38 @@ public class GroupMembers
     [Required]
     public int Id { get; set; }
 
-    [ForeignKey("GroupId")]
-    public Group Group { get; set; }
     [Required]
     public int GroupId { get; set; }
 
+    [ForeignKey("GroupId")]
+    public virtual Group? Group { get; set; }
+
 
     [Required]
-    public string UserId { get; set; }
+    public string MemberId { get; set; }
 
-    [ForeignKey("UserId")]
-    public User User { get; set; }
+    [ForeignKey("MemberId")]
+    public virtual User? Member { get; set; }
+
+    [Required]
+    public string InvitedById { get; set; }
+
+    [ForeignKey("InvitedById")]
+    public virtual User? InvitedBy { get; set; }
 
     public bool IsAdmin { get; set; }
+
+    [Required]
+    public GroupMemberStatus Status { get; set; }
 
     [Required]
     public DateTime CreatedAt { get; set; }
 
     [Required]
     public DateTime UpdatedAt { get; set; }
+
+    public GroupMembers()
+    {
+        Status = GroupMemberStatus.Invited;
+    }
 }

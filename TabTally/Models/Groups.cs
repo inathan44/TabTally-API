@@ -9,12 +9,12 @@ public class Group
     public int Id { get; set; }
 
     [Required]
-    [MinLength(3)]
+    [MinLength(1)]
     [MaxLength(50)]
     public string Name { get; set; }
 
     [ForeignKey("CreatedBy")]
-    public User? User { get; set; }
+    public virtual User? User { get; set; }
 
     [Required]
     public string CreatedBy { get; set; }

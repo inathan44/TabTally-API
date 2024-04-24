@@ -13,13 +13,13 @@ public class Transaction
     public string CreatedBy { get; set; }
 
     [ForeignKey("CreatedBy")]
-    public User? User { get; set; }
+    public virtual User? User { get; set; }
 
     [Required]
     public string PayerId { get; set; }
 
     [ForeignKey("PayerId")]
-    public User? Payer { get; set; }
+    public virtual User? Payer { get; set; }
 
     [Required]
     [Range(0, 999999999)]
@@ -38,7 +38,7 @@ public class Transaction
     public int GroupId { get; set; }
 
     [ForeignKey("GroupId")]
-    public Group? Group { get; set; }
+    public virtual Group? Group { get; set; }
 
     public ICollection<TransactionDetails>? TransactionDetails { get; set; }
 

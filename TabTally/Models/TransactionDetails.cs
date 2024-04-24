@@ -27,7 +27,7 @@ public class TransactionDetails
     public int GroupId { get; set; }
 
     [ForeignKey("GroupId")]
-    public Group? Group { get; set; }
+    public virtual Group? Group { get; set; }
 
     [Required]
     [Range(0, 999999999)]
