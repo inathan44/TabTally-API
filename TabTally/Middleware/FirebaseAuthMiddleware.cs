@@ -29,13 +29,21 @@ public class FirebaseAuthMiddleware
                 {
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     await context.Response.WriteAsync("Unauthorized");
+                    return;
                 }
             }
             else
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await context.Response.WriteAsync("Authorization header not found");
+                return;
             }
+        }
+        else
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync("Authorization header not found");
+            return;
         }
     }
 }
