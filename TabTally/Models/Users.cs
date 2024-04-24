@@ -6,19 +6,21 @@ public class User
     [Required]
     public string Id { get; set; }
 
-    [Required]
+
     [MinLength(3)]
     [MaxLength(50)]
-    public string Username { get; set; }
+    public string? Username { get; set; }
 
-    [Required]
-    public string Email { get; set; }
+    public string? Email { get; set; }
 
-    [Required]
-    public string FirstName { get; set; }
+    [MinLength(1)]
+    [MaxLength(50)]
+    public string? FirstName { get; set; }
 
-    [Required]
-    public string LastName { get; set; }
+
+    [MinLength(1)]
+    [MaxLength(50)]
+    public string? LastName { get; set; }
 
     [Required]
     public DateTime CreatedAt { get; set; }
@@ -26,5 +28,5 @@ public class User
     [Required]
     public DateTime UpdatedAt { get; set; }
 
-    public ICollection<GroupMembers> GroupMembers { get; set; }
+    public ICollection<GroupMembers>? GroupMembers { get; set; }
 }
