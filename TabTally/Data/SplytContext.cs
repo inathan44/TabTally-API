@@ -19,7 +19,20 @@ public class SplytContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        SeedUsers.Seed(modelBuilder);
+        modelBuilder.Entity<GroupMembers>().Property(e => e.Status).HasConversion<string>();
+
+        // Configure the relationship between User/Group/GroupMembers
+        modelBuilder.Entity<GroupMembers>()
+            .HasOne(gm => gm.Member)
+            .WithMany(u => u.GroupMembers)
+            .HasForeignKey(gm => gm.MemberId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GroupMembers>()
+            .HasOne(gm => gm.InvitedBy)
+            .WithMany()
+            .HasForeignKey(gm => gm.InvitedById)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 
     public bool TestConnection()
