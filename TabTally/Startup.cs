@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc.NewtonsoftJson;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
 
@@ -9,7 +10,9 @@ namespace Splyt
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddScoped<TransactionService>();
-            services.AddControllers();
+            services
+                .AddControllers()
+                .AddNewtonsoftJson(opts => opts.SerializerSettings.Converters.Add(new Newtonsoft.Json.Converters.StringEnumConverter()));
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen();
             services.AddDbContext<SplytContext>(options =>
