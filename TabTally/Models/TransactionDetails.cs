@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-public class TransactionDetails
+public class TransactionDetails : ITransactionDetailsPartial
 {
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]

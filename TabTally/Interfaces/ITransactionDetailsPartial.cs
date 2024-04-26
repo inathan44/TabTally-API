@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-public class TransactionDetailsPartial
+public interface ITransactionDetailsPartial
 {
     public string PayerId { get; set; }
     public string RecipientId { get; set; }

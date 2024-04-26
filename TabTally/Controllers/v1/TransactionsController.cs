@@ -19,10 +19,13 @@ public class TransactionsController : ControllerBase
         _transactionService = transactionService;
     }
 
+    /**********************************************************************************************************************
     // /api/v1/transactions [GET] - Gets all transactions
     // NEEDED: Only admins should be able to access this endpoint and pagination should be implemented
+    **********************************************************************************************************************/
     [HttpGet(Name = "GetTransactions")]
-    public ActionResult<ICollection<Transaction>> GetGroupTransactions()
+    // RENAME THIS FUNCTION
+    public ActionResult<ICollection<Transaction>> GetTransactions()
     {
         try
         {
@@ -39,9 +42,10 @@ public class TransactionsController : ControllerBase
             return StatusCode(500, $"Internal server error: {e.Message}");
         }
     }
-
-    // /api/v1/transactions/{id} [GET] - Gets a specific transaction
+    /**********************************************************************************************************************
+    // /api/v1/transactions/{id} [GET] - Gets a specific transaction 
     // NEEDED: Admins and users who are part of the group should be able to access this endpoint
+    ***********************************************************************************************************************/
     [HttpGet("{id}", Name = "GetTransaction")]
     public ActionResult<Transaction> GetTransaction(int id)
     {
@@ -63,7 +67,9 @@ public class TransactionsController : ControllerBase
 
     }
 
-    // /api/v1/Transactions/add [POST]
+    /**********************************************************************************************************************
+        // /api/v1/Transactions/add [POST]
+    **********************************************************************************************************************/
     [HttpPost("add", Name = "CreateTransaction")]
     public IActionResult CreateTransaction([FromBody] CreateTransactionRequest transactionRequest)
     {
@@ -95,18 +101,17 @@ public class TransactionsController : ControllerBase
                 var group = _context.Group.Find(transactionRequest.Transaction.GroupId);
                 if (group == null)
                 {
-                    // Change bad request to send a better error message
-                    return NotFound($"group id does not exist: {transactionRequest.Transaction.GroupId}");
+                    return NotFound($"group id does not exist");
                 }
                 var payer = _context.User.Find(transactionRequest.Transaction.PayerId);
                 if (payer == null)
                 {
-                    return NotFound($"payer id does not exist: {transactionRequest.Transaction.PayerId}");
+                    return NotFound($"payer id does not exist");
                 }
                 var createdBy = _context.User.Find(transactionRequest.Transaction.CreatedBy);
                 if (createdBy == null)
                 {
-                    return NotFound($"created by id does not exist: {transactionRequest.Transaction.CreatedBy}");
+                    return NotFound($"created by id does not exist");
                 }
 
                 // Check if payer ID from transaction details matches transaction payer ID
@@ -186,9 +191,11 @@ public class TransactionsController : ControllerBase
 
     }
 
+    /**********************************************************************************************************************
     // /api/v1/Transactions/{id}/delete [DELETE]
     [HttpDelete("{id}/delete", Name = "DeleteTransaction")]
     // NEEDED: PASS IN A USER to make sure they are allowed to delete the transaction
+    **********************************************************************************************************************/
     public IActionResult DeleteTransaction(int id)
     {
         _logger.LogInformation("DeleteTransaction() called");
@@ -209,6 +216,87 @@ public class TransactionsController : ControllerBase
         catch (Exception e)
         {
             _logger.LogError("DeleteTransaction() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /**********************************************************************************************************************
+    // Edit transaction details
+    // /api/v1/Transactions/{id}/details/edit [PUT]
+    **********************************************************************************************************************/
+    [HttpPut("{id}/details/edit", Name = "EditTransactionDetails")]
+    public IActionResult EditTransactionDetails(int id, [FromBody] List<TransactionDetails> newTransactionDetails)
+    {
+        _logger.LogInformation("EditTransactionDetails() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Must be logged in to edit transaction details");
+        }
+        try
+        {
+            // Find transaction
+            var transaction = _context.Transaction.Find(id);
+            if (transaction == null)
+            {
+                return NotFound("Transaction not found: " + id);
+            }
+
+            // Update timestamp
+            transaction.UpdatedAt = DateTime.UtcNow;
+
+            // Find the group that the transaction is in
+            var group = _context.Group.Find(transaction.GroupId);
+            if (group == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            // Check if user is a group admin
+            var groupMember = _context.GroupMembers.FirstOrDefault(gm => gm.GroupId == group.Id && gm.MemberId == firebaseUserId);
+            bool isAdmin = groupMember?.IsAdmin ?? false;
+
+            // User must be the creator of the transaction or a group admin to edit it
+            if (transaction.CreatedBy != firebaseUserId && !isAdmin)
+            {
+                return StatusCode(403, "Must be the creator of the transaction to edit it");
+            }
+
+            // Check if transaction details are valid
+            bool validDetails = _transactionService.TransactionTotalEqualsDetails(transaction, newTransactionDetails) && _transactionService.DetailsAndTransactionPayersMatch(transaction, newTransactionDetails) && _transactionService.DetailsAndTransactionsGroupsMatch(transaction, newTransactionDetails);
+            if (!validDetails)
+            {
+                return BadRequest("Invalid transaction details");
+            }
+
+            /* Updated transaction details CAN NOT change the corresponding transaction ID
+               deny request if put request attempts to update transaction ID */
+            if (!_transactionService.DetailsAndTransactionIdsMatch(transaction, newTransactionDetails))
+            {
+                return BadRequest("Transaction details must match transaction ID");
+            }
+
+            // Delete old transaction details
+            var oldTransactionDetails = _context.TransactionDetails.Where(td => td.TransactionId == id);
+            _context.TransactionDetails.RemoveRange(oldTransactionDetails);
+
+
+
+            // Add new transaction details
+            foreach (var transactionDetail in newTransactionDetails)
+            {
+                _context.TransactionDetails.Add(transactionDetail);
+            }
+
+            // Update transaction
+            _context.Transaction.Update(transaction);
+            _context.SaveChanges();
+
+            return NoContent();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("EditTransactionDetails() failed with exception: {0}", e);
             return StatusCode(500, $"Internal server error: {e.Message}");
         }
     }
