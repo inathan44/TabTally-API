@@ -12,9 +12,15 @@ namespace Splyt
             services.AddScoped<TransactionService>();
             services
                 .AddControllers()
-                .AddNewtonsoftJson(opts => opts.SerializerSettings.Converters.Add(new Newtonsoft.Json.Converters.StringEnumConverter()));
+                .AddNewtonsoftJson(opts =>
+                {
+                    opts.SerializerSettings.Converters.Add(new Newtonsoft.Json.Converters.StringEnumConverter());
+                    opts.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+                });
+
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen();
+            services.AddLogging();
             services.AddDbContext<SplytContext>(options =>
             {
                 options.UseNpgsql(Environment.GetEnvironmentVariable("DATABASE_URL"));
