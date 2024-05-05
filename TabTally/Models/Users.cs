@@ -6,7 +6,6 @@ public class User
     [Required]
     public string Id { get; set; }
 
-
     [MinLength(3)]
     [MaxLength(50)]
     public string? Username { get; set; }
@@ -28,5 +27,5 @@ public class User
     [Required]
     public DateTime UpdatedAt { get; set; }
 
-    public ICollection<GroupMembers>? GroupMembers { get; set; }
+    public ICollection<GroupMember> GroupMembers { get; set; }
 }

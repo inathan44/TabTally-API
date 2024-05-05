@@ -13,11 +13,11 @@ public class Group
     [MaxLength(50)]
     public string Name { get; set; }
 
-    [ForeignKey("CreatedBy")]
-    public virtual User? User { get; set; }
+    [ForeignKey("CreatedById")]
+    public virtual User? CreatedBy { get; set; }
 
     [Required]
-    public string CreatedBy { get; set; }
+    public string CreatedById { get; set; }
 
     [MinLength(1)]
     [MaxLength(255)]
@@ -29,5 +29,5 @@ public class Group
     [Required]
     public DateTime UpdatedAt { get; set; }
 
-    public ICollection<GroupMembers> GroupMembers { get; set; }
+    public ICollection<GroupMember> GroupMembers { get; set; }
 }

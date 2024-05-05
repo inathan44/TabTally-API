@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-public class GroupMembers
+public class GroupMember
 {
 
     [Key]
@@ -39,7 +39,7 @@ public class GroupMembers
     [Required]
     public DateTime UpdatedAt { get; set; }
 
-    public GroupMembers()
+    public GroupMember()
     {
         Status = GroupMemberStatus.Invited;
     }

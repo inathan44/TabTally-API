@@ -10,10 +10,10 @@ public class Transaction
 
 
     [Required]
-    public string CreatedBy { get; set; }
+    public string CreatedById { get; set; }
 
-    [ForeignKey("CreatedBy")]
-    public virtual User? User { get; set; }
+    [ForeignKey("CreatedById")]
+    public virtual User? CreatedBy { get; set; }
 
     [Required]
     public string PayerId { get; set; }
@@ -40,6 +40,6 @@ public class Transaction
     [ForeignKey("GroupId")]
     public virtual Group? Group { get; set; }
 
-    public ICollection<TransactionDetails>? TransactionDetails { get; set; }
+    public ICollection<TransactionDetail>? TransactionDetails { get; set; }
 
 }
