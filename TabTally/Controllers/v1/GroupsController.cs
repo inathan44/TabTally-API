@@ -54,6 +54,14 @@ public class GroupsController : ControllerBase
         }
         try
         {
+            if (group.Name == null || group.Name.Length < 1 || group.Name.Length > 50)
+            {
+                return BadRequest("Group name must be between 1 and 50 characters");
+            }
+            if (group.Description != null && group.Description.Length > 255)
+            {
+                return BadRequest("Group description must be less than 255 characters");
+            }
             // begin constructing the group object
             Group newGroup = new Group
             {
