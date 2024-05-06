@@ -32,7 +32,7 @@ namespace Splyt.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("CreatedBy")
+                    b.Property<string>("CreatedById")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -50,12 +50,12 @@ namespace Splyt.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CreatedBy");
+                    b.HasIndex("CreatedById");
 
                     b.ToTable("Group");
                 });
 
-            modelBuilder.Entity("GroupMembers", b =>
+            modelBuilder.Entity("GroupMember", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -95,7 +95,7 @@ namespace Splyt.Migrations
 
                     b.HasIndex("MemberId");
 
-                    b.ToTable("GroupMembers");
+                    b.ToTable("GroupMember");
                 });
 
             modelBuilder.Entity("Transaction", b =>
@@ -112,7 +112,7 @@ namespace Splyt.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("CreatedBy")
+                    b.Property<string>("CreatedById")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -132,7 +132,7 @@ namespace Splyt.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CreatedBy");
+                    b.HasIndex("CreatedById");
 
                     b.HasIndex("GroupId");
 
@@ -141,7 +141,7 @@ namespace Splyt.Migrations
                     b.ToTable("Transaction");
                 });
 
-            modelBuilder.Entity("TransactionDetails", b =>
+            modelBuilder.Entity("TransactionDetail", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -176,7 +176,7 @@ namespace Splyt.Migrations
 
                     b.HasIndex("TransactionId");
 
-                    b.ToTable("TransactionDetails");
+                    b.ToTable("TransactionDetail");
                 });
 
             modelBuilder.Entity("User", b =>
@@ -212,16 +212,16 @@ namespace Splyt.Migrations
 
             modelBuilder.Entity("Group", b =>
                 {
-                    b.HasOne("User", "User")
+                    b.HasOne("User", "CreatedBy")
                         .WithMany()
-                        .HasForeignKey("CreatedBy")
+                        .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("User");
+                    b.Navigation("CreatedBy");
                 });
 
-            modelBuilder.Entity("GroupMembers", b =>
+            modelBuilder.Entity("GroupMember", b =>
                 {
                     b.HasOne("Group", "Group")
                         .WithMany("GroupMembers")
@@ -232,13 +232,13 @@ namespace Splyt.Migrations
                     b.HasOne("User", "InvitedBy")
                         .WithMany()
                         .HasForeignKey("InvitedById")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("User", "Member")
                         .WithMany("GroupMembers")
                         .HasForeignKey("MemberId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Group");
@@ -250,9 +250,9 @@ namespace Splyt.Migrations
 
             modelBuilder.Entity("Transaction", b =>
                 {
-                    b.HasOne("User", "User")
+                    b.HasOne("User", "CreatedBy")
                         .WithMany()
-                        .HasForeignKey("CreatedBy")
+                        .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -268,14 +268,14 @@ namespace Splyt.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("CreatedBy");
+
                     b.Navigation("Group");
 
                     b.Navigation("Payer");
-
-                    b.Navigation("User");
                 });
 
-            modelBuilder.Entity("TransactionDetails", b =>
+            modelBuilder.Entity("TransactionDetail", b =>
                 {
                     b.HasOne("Group", "Group")
                         .WithMany()
