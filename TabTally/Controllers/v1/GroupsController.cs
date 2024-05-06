@@ -19,6 +19,27 @@ public class GroupsController : ControllerBase
 
 
     /*****************************************************************************************************************************
+    // api/v1/groups [GET] - Get all groups DEVELOPMENT/TESTING ONLY
+    ******************************************************************************************************************************/
+    [HttpGet]
+    public ActionResult<List<Group>> GetGroups()
+    {
+
+        _logger.LogInformation("GetGroups() called");
+
+        try
+        {
+            List<Group> groups = _context.Group.ToList();
+            return groups;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("GetGroups() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /*****************************************************************************************************************************
     // api/v1/groups/create [POST] - Creates a new group
     ******************************************************************************************************************************/
     [HttpPost("create", Name = "CreateGroup")]
