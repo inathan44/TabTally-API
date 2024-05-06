@@ -5,14 +5,25 @@ using FirebaseAdmin.Auth;
 public class FirebaseAuthMiddleware
 {
     private readonly RequestDelegate _next;
-
     public FirebaseAuthMiddleware(RequestDelegate next)
     {
         _next = next;
+
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext context, ILogger<FirebaseAuthMiddleware> logger)
     {
+        // Routes that do not require authentication (Some are for testing purposes and should be revoked in prod)
+        if (Environment.GetEnvironmentVariable("ENVIRONMENT") == "development")
+        {
+            var excludedPaths = new[] { "/api/v1/Users" };
+            if (excludedPaths.Any(path => context.Request.Path.Equals(path, StringComparison.OrdinalIgnoreCase)))
+            {
+                await _next(context);
+                return;
+            }
+        }
+
         if (context.Request.Headers.TryGetValue("Authorization", out var authorizationHeader))
         {
             var bearerToken = authorizationHeader.FirstOrDefault()?.Split(" ").Last();

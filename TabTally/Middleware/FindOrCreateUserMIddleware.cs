@@ -9,10 +9,11 @@ public class FindOrCreateUserMiddleware
         _next = next;
     }
 
-    public async Task InvokeAsync(HttpContext httpContext)
+    public async Task InvokeAsync(HttpContext httpContext, ILogger<FindOrCreateUserMiddleware> logger)
     {
         var dbContext = httpContext.RequestServices.GetRequiredService<SplytContext>();
         if (httpContext.Items.TryGetValue("FirebaseUserId", out var firebaseUserId))
+        {
             if (firebaseUserId != null)
             {
                 string firebaseUserIdString = firebaseUserId.ToString() ?? "";
@@ -42,6 +43,12 @@ public class FindOrCreateUserMiddleware
                     }
                 }
             }
+        }
+        else
+        {
+            logger.LogError("FirebaseUserId not found in httpContext.Items");
+            await _next(httpContext);
+        }
     }
 
 
