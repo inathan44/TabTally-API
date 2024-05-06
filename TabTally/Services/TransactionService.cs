@@ -33,9 +33,9 @@ public class TransactionService
         }
         return true;
     }
-    public bool DetailsAndTransactionIdsMatch(Transaction transaction, IEnumerable<TransactionDetails> transactionDetails)
+    public bool DetailsAndTransactionIdsMatch(Transaction transaction, IEnumerable<TransactionDetail> transactionDetails)
     {
-        foreach (TransactionDetails transactionDetail in transactionDetails)
+        foreach (TransactionDetail transactionDetail in transactionDetails)
         {
             if (transactionDetail.TransactionId != transaction.Id)
             {

@@ -17,70 +17,10 @@ public class GroupsController : ControllerBase
         _logger = logger;
     }
 
-    /*
-    
-    *****************
-    MOVE THIS TO THE USERS CONTROLLER UNDER USERS/USERID/GROUPS
-    *****************
-    */
-    // api/v1/groups [GET] - Returns a list of groups
-    [HttpGet(Name = "GetUserGroups")]
-    public ActionResult<List<GroupWithoutUsersDTO>> GetUserGroups()
-    {
-        _logger.LogInformation("GetGroups() called");
-        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
-        if (firebaseUserId == null)
-        {
-            return StatusCode(403, "Forbidden");
-        }
 
-        try
-        {
-            // Get all groups this user is a member of
-            Group[] groups = _context.Group.Include(g => g.GroupMembers).Where(g => g.GroupMembers.Any(gm => gm.MemberId == firebaseUserId)).ToArray();
-
-
-            // Shape the response object
-            var groupsDto = new List<GroupWithoutUsersDTO>();
-            foreach (var group in groups)
-            {
-                GroupWithoutUsersDTO groupWithoutUsers = new GroupWithoutUsersDTO()
-                {
-                    Id = group.Id,
-                    Name = group.Name,
-                    Description = group.Description,
-                    CreatedBy = group.CreatedBy,
-                    CreatedAt = group.CreatedAt,
-                    UpdatedAt = group.UpdatedAt,
-                    GroupMembers = group.GroupMembers
-                        .Select(gm => new GroupMembersWithoutUser()
-                        {
-                            GroupId = gm.GroupId,
-                            MemberId = gm.MemberId,
-                            IsAdmin = gm.IsAdmin,
-                            Status = gm.Status,
-                            InvitedById = gm.InvitedById,
-                            CreatedAt = gm.CreatedAt,
-                            UpdatedAt = gm.UpdatedAt
-                        })
-                        .ToList()
-                };
-
-                // Add the DTO to the list
-                groupsDto.Add(groupWithoutUsers);
-            }
-
-            return groupsDto;
-        }
-
-        catch (Exception e)
-        {
-            _logger.LogError("GetGroups() failed with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
-        }
-    }
-
+    /*****************************************************************************************************************************
     // api/v1/groups/create [POST] - Creates a new group
+    ******************************************************************************************************************************/
     [HttpPost("create", Name = "CreateGroup")]
     public ActionResult<GroupWithoutUsersDTO> CreateGroup(CreateGroupDTO group)
     {
@@ -97,7 +37,7 @@ public class GroupsController : ControllerBase
             Group newGroup = new Group
             {
                 Name = group.Name,
-                CreatedBy = firebaseUserId,
+                CreatedById = firebaseUserId,
                 Description = group.Description,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
@@ -112,7 +52,7 @@ public class GroupsController : ControllerBase
             int groupId = newGroup.Id;
 
             // create the group member object for the user who created the group
-            GroupMembers newGroupMember = new GroupMembers
+            GroupMember newGroupMember = new GroupMember
             {
                 GroupId = groupId,
                 MemberId = firebaseUserId,
@@ -123,8 +63,10 @@ public class GroupsController : ControllerBase
                 InvitedById = firebaseUserId,
             };
 
-            _context.GroupMembers.Add(newGroupMember);
+            _context.GroupMember.Add(newGroupMember);
             _context.SaveChanges();
+
+
 
             // Shape the response object
             var groupMembersWithoutUser = new GroupMembersWithoutUser
@@ -143,7 +85,7 @@ public class GroupsController : ControllerBase
                 Id = newGroup.Id,
                 Name = newGroup.Name,
                 Description = newGroup.Description,
-                CreatedBy = newGroup.CreatedBy,
+                CreatedById = newGroup.CreatedById,
                 CreatedAt = newGroup.CreatedAt,
                 UpdatedAt = newGroup.UpdatedAt,
                 GroupMembers = new List<GroupMembersWithoutUser> { groupMembersWithoutUser }
@@ -160,8 +102,71 @@ public class GroupsController : ControllerBase
         }
     }
 
+    /*****************************************************************************************************************************
+    // Get one group
+    // api/v1/groups/{groupId} [GET]
+    *****************************************************************************************************************************/
+    [HttpGet("{groupId}", Name = "GetGroup")]
+    public ActionResult<GroupWithoutUsersDTO> GetGroup(int groupId)
+    {
+        _logger.LogInformation("GetGroup() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+        // Find the group
+        Group? group = _context.Group.Find(groupId);
+        if (group == null)
+        {
+            return NotFound("Group not found");
+        }
+
+        // Check if the user is a member of the group
+        GroupMember? groupMember = _context.GroupMember.Find(groupId, firebaseUserId);
+        if (groupMember == null)
+        {
+            return StatusCode(403, "Forbidden: You must be a member of the group to view it");
+        }
+
+        // Get the group members
+        List<GroupMembersWithoutUser> groupMembersWithoutUser = new List<GroupMembersWithoutUser>();
+        List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined).ToList();
+        foreach (var member in groupMembers)
+        {
+            GroupMembersWithoutUser groupMemberWithoutUser = new GroupMembersWithoutUser
+            {
+                GroupId = member.GroupId,
+                MemberId = member.MemberId,
+                IsAdmin = member.IsAdmin,
+                Status = member.Status,
+                InvitedById = member.InvitedById,
+                CreatedAt = member.CreatedAt,
+                UpdatedAt = member.UpdatedAt
+            };
+            groupMembersWithoutUser.Add(groupMemberWithoutUser);
+        }
+
+        // Shape the response object
+        GroupWithoutUsersDTO response = new GroupWithoutUsersDTO
+        {
+            Id = group.Id,
+            Name = group.Name,
+            Description = group.Description,
+            CreatedById = group.CreatedById,
+            CreatedAt = group.CreatedAt,
+            UpdatedAt = group.UpdatedAt,
+            GroupMembers = groupMembersWithoutUser
+        };
+
+        return response;
+    }
+
+
+    /*****************************************************************************************************************************
     // Add members to a group
     // api/v1/groups/{groupId}/addmembers [POST]
+    *****************************************************************************************************************************/
     [HttpPost("{groupId}/addmembers", Name = "AddMembersToGroup")]
     public ActionResult AddMembersToGroup(int groupId, AddMembersDTO members)
     {
@@ -180,7 +185,7 @@ public class GroupsController : ControllerBase
                 return NotFound("Group not found");
             }
             // Check if member who is inviting others is part of the group
-            GroupMembers? inviter = _context.GroupMembers.Find(groupId, firebaseUserId);
+            GroupMember? inviter = _context.GroupMember.Find(groupId, firebaseUserId);
             if (inviter == null || inviter.Status != GroupMemberStatus.Joined)
             {
                 return StatusCode(403, "Forbidden: You must be a member of the group to add others to it");
@@ -198,7 +203,7 @@ public class GroupsController : ControllerBase
             // Check if members are already in the group (must have accepted invite to be in the group)
             foreach (var memberId in members.MemberIds)
             {
-                GroupMembers? member = _context.GroupMembers.Find(groupId, memberId);
+                GroupMember? member = _context.GroupMember.Find(groupId, memberId);
                 if (member != null && member.Status == GroupMemberStatus.Joined)
                 {
                     return BadRequest($"A user you tried to add is already in the group");
@@ -207,7 +212,7 @@ public class GroupsController : ControllerBase
             // Check to see if the invited user is banned
             foreach (var memberId in members.MemberIds)
             {
-                GroupMembers? member = _context.GroupMembers.Find(groupId, memberId);
+                GroupMember? member = _context.GroupMember.Find(groupId, memberId);
                 if (member != null && member.Status == GroupMemberStatus.Banned)
                 {
                     return BadRequest($"A user you tried to add is banned from the group");
@@ -217,7 +222,7 @@ public class GroupsController : ControllerBase
             // Add the members to the group
             foreach (var memberId in members.MemberIds)
             {
-                GroupMembers newGroupMember = new GroupMembers
+                GroupMember newGroupMember = new GroupMember
                 {
                     GroupId = groupId,
                     MemberId = memberId,
@@ -228,7 +233,7 @@ public class GroupsController : ControllerBase
                     InvitedById = firebaseUserId,
                 };
 
-                _context.GroupMembers.Add(newGroupMember);
+                _context.GroupMember.Add(newGroupMember);
                 _context.SaveChanges();
             }
 
@@ -243,5 +248,326 @@ public class GroupsController : ControllerBase
         }
     }
 
+    /*****************************************************************************************************************************
+    Delete a group
+    api/v1/groups/{groupId}/delete [DELETE]
+    *****************************************************************************************************************************/
+    [HttpDelete("{groupId}/delete", Name = "DeleteGroup")]
+    public ActionResult DeleteGroup(int groupId)
+    {
+        _logger.LogInformation("DeleteGroup() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+        try
+        {
+            using (var batchTransaction = _context.Database.BeginTransaction())
+            {
+                // Find the group
+                Group? group = _context.Group.Find(groupId);
+                if (group == null)
+                {
+                    return NotFound("Group not found");
+                }
+
+                // Check if the user is the creator of the group
+                if (group.CreatedById != firebaseUserId)
+                {
+                    return StatusCode(403, "Forbidden: You must be the creator of the group to delete it");
+                }
+
+                // Delete all group members
+                List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId).ToList();
+                foreach (var member in groupMembers)
+                {
+                    _context.GroupMember.Remove(member);
+                }
+
+                // Delete the group
+                _context.Group.Remove(group);
+
+
+                _context.SaveChanges();
+                batchTransaction.Commit();
+
+                return NoContent();
+            }
+
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("DeleteGroup() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /*****************************************************************************************************************************
+    update a group
+    api/v1/groups/{groupId}/update [PUT]
+    *****************************************************************************************************************************/
+
+    [HttpPut("{groupId}/update", Name = "UpdateGroup")]
+    public ActionResult UpdateGroup(int groupId, [FromBody] UpdateGroupDTO group)
+    {
+        _logger.LogInformation("UpdateGroup() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+        try
+        {
+            // Find the group
+            Group? groupToUpdate = _context.Group.Find(groupId);
+            if (groupToUpdate == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            bool createdByUser = groupToUpdate.CreatedById == firebaseUserId;
+            bool isAdmin = _context.GroupMember.Find(groupId, firebaseUserId)?.IsAdmin ?? false;
+
+            if (!createdByUser && !isAdmin)
+            {
+                return StatusCode(403, "Forbidden: You must be the creator of the group or an admin to update it");
+            }
+
+
+            // Update the group
+            groupToUpdate.Name = group.Name ?? groupToUpdate.Name;
+            groupToUpdate.Description = group.Description ?? groupToUpdate.Description;
+            groupToUpdate.UpdatedAt = DateTime.UtcNow;
+
+            _context.SaveChanges();
+
+            return NoContent();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("UpdateGroup() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /*****************************************************************************************************************************
+    Leave a group
+    api/v1/groups/{groupId}/leave [DELETE]
+    *****************************************************************************************************************************/
+    [HttpDelete("{groupId}/leave", Name = "LeaveGroup")]
+    public ActionResult LeaveGroup(int groupId)
+    {
+        _logger.LogInformation("LeaveGroup() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+        try
+        {
+            // Find group
+            Group? group = _context.Group.Find(groupId);
+            if (group == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            // Find group member
+            GroupMember? groupMember = _context.GroupMember.Find(groupId, firebaseUserId);
+            if (groupMember == null)
+            {
+                return StatusCode(403, "Forbidden: You must be a member of the group to leave it");
+            }
+
+            // Check if the user is the creator of the group
+            if (group.CreatedById == firebaseUserId)
+            {
+                return StatusCode(403, "You cannot leave a group you created. Delete the group instead.");
+            }
+
+            // Check if the user is the last admin
+            if (groupMember.IsAdmin)
+            {
+                List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined && gm.IsAdmin == true).ToList();
+                if (groupMembers.Count == 1)
+                {
+                    return StatusCode(403, "You are the last admin of the group. Promote another member to admin before leaving.");
+                }
+            }
+
+            // If a user is banned, they cannot "leave" the group (To ensure they can not rejoin)
+            if (groupMember.Status == GroupMemberStatus.Banned)
+            {
+                return StatusCode(403, "You are banned from the group.");
+            }
+
+            // Delete the group member
+            _context.GroupMember.Remove(groupMember);
+
+            _context.SaveChanges();
+
+            return NoContent();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("LeaveGroup() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /*****************************************************************************************************************************
+    Get a groups transactions
+    api/v1/groups/{groupId}/transactions [GET]
+    *****************************************************************************************************************************/
+    [HttpGet("{groupId}/transactions", Name = "GetGroupTransactions")]
+    public ActionResult<List<Transaction>> GetGroupTransaction(int groupId)
+    {
+        _logger.LogInformation("GetGroupTransaction() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+        try
+        {
+            // Find group
+            Group? group = _context.Group.Find(groupId);
+            if (group == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            // Check if the user is a member of the group and has status of "Joined"
+            GroupMember? groupMember = _context.GroupMember.Find(groupId, firebaseUserId);
+            if (groupMember == null || groupMember.Status != GroupMemberStatus.Joined)
+            {
+                return StatusCode(403, "Forbidden: You must be a member of the group to view its transactions");
+            }
+
+            // Get the transactions
+            List<Transaction> transactions = _context.Transaction.Where(t => t.GroupId == groupId).ToList();
+
+            return transactions;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("GetGroupTransaction() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /*****************************************************************************************************************************
+    Remove a member from a group
+    api/v1/groups/{groupId}/removemember [DELETE]
+    *****************************************************************************************************************************/
+    [HttpDelete("{groupId}/removemember/{userId}", Name = "RemoveMemberFromGroup")]
+    public ActionResult RemoveMember(int groupId, string userId)
+    {
+        _logger.LogInformation("RemoveMember() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+        try
+        {
+            // Find the group
+            Group? group = _context.Group.Find(groupId);
+            if (group == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            bool isCreator = group.CreatedById == firebaseUserId;
+            bool isAdminAndMember = _context.GroupMember.Find(groupId, firebaseUserId)?.IsAdmin == true &&
+                                    _context.GroupMember.Find(groupId, firebaseUserId)?.Status == GroupMemberStatus.Joined;
+            bool removingSelf = firebaseUserId == userId;
+            if (!isCreator && !isAdminAndMember && !removingSelf)
+            {
+                return StatusCode(403, "You do not have permission to remove this member from the group");
+            }
+
+            // Find the member to remove
+            GroupMember? memberToRemove = _context.GroupMember.Find(groupId, userId);
+            if (memberToRemove == null)
+            {
+                return NotFound("User not found in group");
+            }
+            // Check if user is in the group
+            if (memberToRemove.Status != GroupMemberStatus.Joined)
+            {
+                return BadRequest("User is not in the group");
+            }
+
+            // Check if the user is the creator of the group
+            if (group.CreatedById == userId)
+            {
+                return StatusCode(403, "You cannot remove the creator of the group");
+            }
+
+            // Check if the user is the last admin
+            if (memberToRemove.IsAdmin)
+            {
+                List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined && gm.IsAdmin == true).ToList();
+                if (groupMembers.Count == 1)
+                {
+                    return StatusCode(403, "You are trying to remove the last admin of the group. Promote another member to admin before removing.");
+                }
+            }
+
+            // Remove the member
+            _context.GroupMember.Remove(memberToRemove);
+            _context.SaveChanges();
+
+            return NoContent();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("RemoveMember() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /*****************************************************************************************************************************
+    get members of a group
+    api/v1/groups/{groupId}/members [GET]
+    *****************************************************************************************************************************/
+    [HttpGet("{groupId}/members", Name = "GetGroupMembers")]
+    public ActionResult<List<GroupMember>> GetGroupMembers(int groupId)
+    {
+        _logger.LogInformation("GetGroupMembers() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+        try
+        {
+            // Find the group
+            Group? group = _context.Group.Find(groupId);
+            if (group == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            // Check if the user is a member of the group
+            GroupMember? groupMember = _context.GroupMember.Find(groupId, firebaseUserId);
+            if (groupMember == null || groupMember.Status != GroupMemberStatus.Joined)
+            {
+                return StatusCode(403, "Forbidden: You must be a member of the group to view its members");
+            }
+
+            // Get the group members
+            List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId).Include(gm => gm.Member).ToList();
+
+            return groupMembers;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("GetGroupMembers() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
 
 }
