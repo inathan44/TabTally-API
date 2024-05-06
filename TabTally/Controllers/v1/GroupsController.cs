@@ -570,4 +570,102 @@ public class GroupsController : ControllerBase
         }
     }
 
+    /*****************************************************************************************************************************
+    change a members status in a group
+    api/v1/groups/{groupId}/changestatus/{userId} [PUT]
+    *****************************************************************************************************************************/
+    [HttpPut("{groupId}/changestatus/{userId}", Name = "ChangeMemberStatus")]
+    public ActionResult ChangeMemberStatus(int groupId, string userId, [FromBody] GroupMemberStatus newStatus)
+    {
+        _logger.LogInformation("ChangeMemberStatus() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+
+
+        try
+        {
+            Group? group = _context.Group.Find(groupId);
+            if (group == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            // Check role of user
+            GroupMember? groupMember = _context.GroupMember.Find(groupId, firebaseUserId);
+            if (groupMember == null)
+            {
+                return StatusCode(403, "Forbidden: You must be a member of the group to change a member's status");
+            }
+
+            if (groupMember.Status == GroupMemberStatus.Banned)
+            {
+                return StatusCode(403, "Forbidden: you are banned from the group");
+            }
+            else if (groupMember.Status == GroupMemberStatus.Invited)
+            {
+                // an invited user can only accept or decline their own invite
+                if (firebaseUserId != userId)
+                {
+                    return StatusCode(403, "Forbidden: You must accept or decline your own invite");
+                }
+                if (newStatus != GroupMemberStatus.Joined && newStatus != GroupMemberStatus.Declined)
+                {
+                    return BadRequest("Forbidden: You can only accept or decline an invite");
+                }
+                groupMember.Status = newStatus;
+                groupMember.UpdatedAt = DateTime.UtcNow;
+            }
+            else if (groupMember.Status == GroupMemberStatus.Joined)
+            {
+                if (!groupMember.IsAdmin && group.CreatedById != firebaseUserId)
+                {
+                    return StatusCode(403, "Forbidden: You must be an admin or the creator of the group to change a member's status");
+                }
+                if (group.CreatedById == userId)
+                {
+                    return StatusCode(403, "Forbidden: You cannot change the status of the creator of the group");
+                }
+                if (groupMember.MemberId == userId)
+                {
+                    return StatusCode(403, "Forbidden: You cannot change your own status");
+                }
+                GroupMember? memberToChange = _context.GroupMember.Find(groupId, userId);
+                if (memberToChange == null)
+                {
+                    return NotFound("User not found in group");
+                }
+                if (memberToChange.Status == GroupMemberStatus.Banned || memberToChange.Status == GroupMemberStatus.Invited || memberToChange.Status == GroupMemberStatus.Left || memberToChange.Status == GroupMemberStatus.Declined || memberToChange.Status == GroupMemberStatus.Kicked)
+                {
+                    return StatusCode(403, "Forbidden: You cannot change the status of a banned, invited, left, declined, or removed user");
+                }
+
+                // Only allow users to kick or ban users
+                if (newStatus != GroupMemberStatus.Kicked && newStatus != GroupMemberStatus.Banned)
+                {
+                    return BadRequest("Forbidden: You can only kick or ban a user");
+                }
+                memberToChange.Status = newStatus;
+                memberToChange.UpdatedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                return StatusCode(403, "Forbidden: You must be a member of the group to change a member's status");
+            }
+
+
+
+            _context.SaveChanges();
+
+            return NoContent();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("ChangeMemberStatus() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
 }
