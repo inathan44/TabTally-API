@@ -144,51 +144,60 @@ public class GroupsController : ControllerBase
         {
             return StatusCode(403, "Forbidden");
         }
-        // Find the group
-        Group? group = _context.Group.Find(groupId);
-        if (group == null)
+        try
         {
-            return NotFound("Group not found");
-        }
-
-        // Check if the user is a member of the group
-        GroupMember? groupMember = _context.GroupMember.Find(groupId, firebaseUserId);
-        if (groupMember == null)
-        {
-            return StatusCode(403, "Forbidden: You must be a member of the group to view it");
-        }
-
-        // Get the group members
-        List<GroupMembersWithoutUser> groupMembersWithoutUser = new List<GroupMembersWithoutUser>();
-        List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined).ToList();
-        foreach (var member in groupMembers)
-        {
-            GroupMembersWithoutUser groupMemberWithoutUser = new GroupMembersWithoutUser
+            // Find the group
+            Group? group = _context.Group.Find(groupId);
+            if (group == null)
             {
-                GroupId = member.GroupId,
-                MemberId = member.MemberId,
-                IsAdmin = member.IsAdmin,
-                Status = member.Status,
-                InvitedById = member.InvitedById,
-                CreatedAt = member.CreatedAt,
-                UpdatedAt = member.UpdatedAt
+                return NotFound("Group not found");
+            }
+
+            // Check if the user is a member of the group
+            GroupMember? groupMember = _context.GroupMember
+                .FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
+            if (groupMember == null || groupMember.Status != GroupMemberStatus.Joined)
+            {
+                return StatusCode(403, "Forbidden: You must be a member of the group to view it");
+            }
+
+            // Get the group members
+            List<GroupMembersWithoutUser> groupMembersWithoutUser = new List<GroupMembersWithoutUser>();
+            List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined).ToList();
+            foreach (var member in groupMembers)
+            {
+                GroupMembersWithoutUser groupMemberWithoutUser = new GroupMembersWithoutUser
+                {
+                    GroupId = member.GroupId,
+                    MemberId = member.MemberId,
+                    IsAdmin = member.IsAdmin,
+                    Status = member.Status,
+                    InvitedById = member.InvitedById,
+                    CreatedAt = member.CreatedAt,
+                    UpdatedAt = member.UpdatedAt
+                };
+                groupMembersWithoutUser.Add(groupMemberWithoutUser);
+            }
+
+            // Shape the response object
+            GroupWithoutUsersDTO response = new GroupWithoutUsersDTO
+            {
+                Id = group.Id,
+                Name = group.Name,
+                Description = group.Description,
+                CreatedById = group.CreatedById,
+                CreatedAt = group.CreatedAt,
+                UpdatedAt = group.UpdatedAt,
+                GroupMembers = groupMembersWithoutUser
             };
-            groupMembersWithoutUser.Add(groupMemberWithoutUser);
+
+            return response;
         }
-
-        // Shape the response object
-        GroupWithoutUsersDTO response = new GroupWithoutUsersDTO
+        catch (Exception e)
         {
-            Id = group.Id,
-            Name = group.Name,
-            Description = group.Description,
-            CreatedById = group.CreatedById,
-            CreatedAt = group.CreatedAt,
-            UpdatedAt = group.UpdatedAt,
-            GroupMembers = groupMembersWithoutUser
-        };
-
-        return response;
+            _logger.LogError("GetGroup() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
     }
 
 
@@ -371,7 +380,7 @@ public class GroupsController : ControllerBase
 
             _context.SaveChanges();
 
-            return NoContent();
+            return Ok("Group updated");
         }
         catch (Exception e)
         {
