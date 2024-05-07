@@ -16,9 +16,10 @@ public class FirebaseAuthMiddleware
         // Routes that do not require authentication (Some are for testing purposes and should be revoked in prod)
         if (Environment.GetEnvironmentVariable("ENVIRONMENT") == "development")
         {
-            var excludedPaths = new[] { "/api/v1/Users" };
+            var excludedPaths = new[] { "/api/v1/Users", "/api/v1/Groups" };
             if (excludedPaths.Any(path => context.Request.Path.Equals(path, StringComparison.OrdinalIgnoreCase)))
             {
+                logger.LogInformation("Path does not require authentication: {path}", context.Request.Path);
                 await _next(context);
                 return;
             }
@@ -45,15 +46,17 @@ public class FirebaseAuthMiddleware
             }
             else
             {
+                logger.LogError("Bearer token not found");
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsync("Authorization header not found");
+                await context.Response.WriteAsync("Authorization header not found (1)");
                 return;
             }
         }
         else
         {
+            logger.LogError("Authorization header not found");
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsync("Authorization header not found");
+            await context.Response.WriteAsync("Authorization header not found (2)");
             return;
         }
     }
