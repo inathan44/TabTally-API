@@ -71,7 +71,7 @@ public class UsersController : ControllerBase
         // Users can only update their own user record
         if (firebaseUserId != id)
         {
-            return StatusCode(403, "Forbidden");
+            return StatusCode(403, "Forbidden: can only update your own user record");
         }
 
         try
