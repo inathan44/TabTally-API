@@ -23,19 +23,56 @@ public class SplytContext : DbContext
 
         // Configure the relationship between User/Group/GroupMembers
         // Might need to change the cascade delete behavior for if a user deletes their account
-        modelBuilder.Entity<GroupMember>()
-            .HasOne(gm => gm.Member)
-            .WithMany(u => u.GroupMembers)
-            .HasForeignKey(gm => gm.MemberId)
-            .OnDelete(DeleteBehavior.Cascade);
 
+        // Set up optional relationship between Transaction and User
+        modelBuilder.Entity<Transaction>()
+            .HasOne(t => t.CreatedBy)
+            .WithMany()
+            .HasForeignKey(t => t.CreatedById)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
+
+        modelBuilder.Entity<Transaction>()
+            .HasOne(t => t.Payer)
+            .WithMany()
+            .HasForeignKey(t => t.PayerId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
+
+
+        // Set up optional relationship between TransactionDetail and User
+        modelBuilder.Entity<TransactionDetail>()
+            .HasOne(td => td.Payer)
+            .WithMany()
+            .HasForeignKey(td => td.PayerId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
+
+        modelBuilder.Entity<TransactionDetail>()
+            .HasOne(td => td.Recipient)
+            .WithMany()
+            .HasForeignKey(td => td.RecipientId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
+
+        // Set up cascading delete for GroupMember and Group
         modelBuilder.Entity<GroupMember>()
             .HasOne(gm => gm.InvitedBy)
             .WithMany()
             .HasForeignKey(gm => gm.InvitedById)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<GroupMember>()
+            .HasOne(gm => gm.Member)
+            .WithMany()
+            .HasForeignKey(gm => gm.MemberId)
+            .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<Group>()
+            .HasOne(g => g.CreatedBy)
+            .WithMany()
+            .HasForeignKey(g => g.CreatedById)
+            .OnDelete(DeleteBehavior.Cascade);
 
     }
 
