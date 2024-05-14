@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -10,9 +11,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Splyt.Migrations
 {
     [DbContext(typeof(SplytContext))]
-    partial class SplytContextModelSnapshot : ModelSnapshot
+    [Migration("20240513193349_TransactionAllowNullUser")]
+    partial class TransactionAllowNullUser
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -87,9 +90,6 @@ namespace Splyt.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("UserId")
-                        .HasColumnType("text");
-
                     b.HasKey("Id");
 
                     b.HasIndex("GroupId");
@@ -97,8 +97,6 @@ namespace Splyt.Migrations
                     b.HasIndex("InvitedById");
 
                     b.HasIndex("MemberId");
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("GroupMember");
                 });
@@ -237,14 +235,10 @@ namespace Splyt.Migrations
                         .IsRequired();
 
                     b.HasOne("User", "Member")
-                        .WithMany()
+                        .WithMany("GroupMembers")
                         .HasForeignKey("MemberId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("User", null)
-                        .WithMany("GroupMembers")
-                        .HasForeignKey("UserId");
 
                     b.Navigation("Group");
 
@@ -257,8 +251,7 @@ namespace Splyt.Migrations
                 {
                     b.HasOne("User", "CreatedBy")
                         .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("CreatedById");
 
                     b.HasOne("Group", "Group")
                         .WithMany()
@@ -268,8 +261,7 @@ namespace Splyt.Migrations
 
                     b.HasOne("User", "Payer")
                         .WithMany()
-                        .HasForeignKey("PayerId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("PayerId");
 
                     b.Navigation("CreatedBy");
 
@@ -288,13 +280,11 @@ namespace Splyt.Migrations
 
                     b.HasOne("User", "Payer")
                         .WithMany()
-                        .HasForeignKey("PayerId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("PayerId");
 
                     b.HasOne("User", "Recipient")
                         .WithMany()
-                        .HasForeignKey("RecipientId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("RecipientId");
 
                     b.HasOne("Transaction", null)
                         .WithMany("TransactionDetails")
