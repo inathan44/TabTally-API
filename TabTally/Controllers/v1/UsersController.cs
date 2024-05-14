@@ -148,7 +148,7 @@ public class UsersController : ControllerBase
                     Name = group.Name,
                     Description = group.Description,
                     CreatedById = group.CreatedById,
-                    CreatedBy = new GetUserGroupsMemberDTO()
+                    CreatedBy = new UserSummaryDTO()
                     {
                         Id = creator.Id,
                         Username = creator.Username,
@@ -201,61 +201,42 @@ public class UsersController : ControllerBase
         // Users can only delete their own user record
         if (firebaseUserId != id)
         {
-            return StatusCode(403, "Forbidden");
+            return StatusCode(403, "you can only delete your own user record");
         }
-
-        try
+        using (var batchTransaction = _context.Database.BeginTransaction())
         {
-            _logger.LogInformation("DeleteUser() called");
-
-            var existingUser = _context.User.FirstOrDefault(u => u.Id == firebaseUserId);
-            if (existingUser == null)
+            try
             {
-                return NotFound("User not found when deleting: " + firebaseUserId);
+                _logger.LogInformation("DeleteUser() called");
+
+                var existingUser = _context.User.FirstOrDefault(u => u.Id == firebaseUserId);
+                if (existingUser == null)
+                {
+                    return NotFound("User not found when deleting: " + firebaseUserId);
+                }
+
+                // Delete the user from Firebase
+                var auth = FirebaseAuth.DefaultInstance;
+                await auth.DeleteUserAsync(firebaseUserId);
+
+                // If the Firebase operation succeeded, commit the transaction
+                batchTransaction.Commit();
+
+                _logger.LogInformation("User deleted: {0}", firebaseUserId);
+                return NoContent();
             }
-
-            // Start a new transaction
-            using var transaction = await _context.Database.BeginTransactionAsync();
-
-            // Find all GroupMember records that reference this user
-            var groupMembers = _context.GroupMember
-                .Where(gm => gm.InvitedById == existingUser.Id || gm.MemberId == existingUser.Id)
-                .ToList();
-
-            // If any such records exist, delete them
-            if (groupMembers.Any())
+            catch (FirebaseAuthException e)
             {
-                _context.GroupMember.RemoveRange(groupMembers);
+                _logger.LogError("DeleteUser() failed to delete user from firebase with exception: {0}", e);
+                return StatusCode(500, $"Internal server error: {e.Message}");
             }
-
-            // Remove the user from the database
-            _context.User.Remove(existingUser);
-
-            // Save changes to the databse
-            await _context.SaveChangesAsync();
-
-            // Delete the user from Firebase
-            var auth = FirebaseAuth.DefaultInstance;
-            await auth.DeleteUserAsync(firebaseUserId);
-
-            // If the Firebase operation succeeded, commit the transaction
-            await transaction.CommitAsync();
-
-            _logger.LogInformation("User deleted: {0}", firebaseUserId);
-            return NoContent();
-        }
-        catch (FirebaseAuthException e)
-        {
-            _logger.LogError("DeleteUser() failed to delete user from firebase with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
-        }
-        catch (Exception e)
-        {
-            _logger.LogError("DeleteUser() failed with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
+            catch (Exception e)
+            {
+                _logger.LogError("DeleteUser() failed with exception: {0}", e);
+                return StatusCode(500, $"Internal server error: {e.Message}");
+            }
         }
     }
-
     /************************************************************************************************************
     // api/v1/Users/{id} [Get] - Retrieves the signed in user's information
     ************************************************************************************************************/
