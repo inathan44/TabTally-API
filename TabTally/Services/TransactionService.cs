@@ -1,47 +1,14 @@
 public class TransactionService
 {
-    public bool TransactionTotalEqualsDetails(Transaction transaction, IEnumerable<ITransactionDetailsPartial> transactionDetails)
+    public bool TransactionTotalEqualsDetails(decimal transactionAmount, IEnumerable<Decimal> transactionDetailsAmounts)
     {
         decimal total = 0;
-        foreach (ITransactionDetailsPartial transactionDetail in transactionDetails)
+        foreach (var transactionDetailsAmount in transactionDetailsAmounts)
         {
-            total += transactionDetail.Amount;
+            total += transactionDetailsAmount;
         }
-        return total == transaction.Amount;
+        return total == transactionAmount;
     }
 
-    public bool DetailsAndTransactionPayersMatch(Transaction transaction, IEnumerable<ITransactionDetailsPartial> transactionDetails)
-    {
-        foreach (ITransactionDetailsPartial transactionDetail in transactionDetails)
-        {
-            if (transactionDetail.PayerId != transaction.PayerId)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
 
-    public bool DetailsAndTransactionsGroupsMatch(Transaction transaction, IEnumerable<ITransactionDetailsPartial> transactionDetails)
-    {
-        foreach (ITransactionDetailsPartial transactionDetail in transactionDetails)
-        {
-            if (transactionDetail.GroupId != transaction.GroupId)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-    public bool DetailsAndTransactionIdsMatch(Transaction transaction, IEnumerable<TransactionDetail> transactionDetails)
-    {
-        foreach (TransactionDetail transactionDetail in transactionDetails)
-        {
-            if (transactionDetail.TransactionId != transaction.Id)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
 }
