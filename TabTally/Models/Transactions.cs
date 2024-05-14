@@ -8,15 +8,12 @@ public class Transaction
     [Required]
     public int Id { get; set; }
 
-
-    [Required]
-    public string CreatedById { get; set; }
+    public string? CreatedById { get; set; }
 
     [ForeignKey("CreatedById")]
     public virtual User? CreatedBy { get; set; }
 
-    [Required]
-    public string PayerId { get; set; }
+    public string? PayerId { get; set; }
 
     [ForeignKey("PayerId")]
     public virtual User? Payer { get; set; }

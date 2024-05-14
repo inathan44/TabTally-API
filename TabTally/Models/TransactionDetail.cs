@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-public class TransactionDetail : ITransactionDetailsPartial
+public class TransactionDetail
 {
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
@@ -11,14 +11,12 @@ public class TransactionDetail : ITransactionDetailsPartial
     [Required]
     public int TransactionId { get; set; }
 
-    [Required]
-    public string PayerId { get; set; }
+    public string? PayerId { get; set; }
 
     [ForeignKey("PayerId")]
     public virtual User? Payer { get; set; }
 
-    [Required]
-    public string RecipientId { get; set; }
+    public string? RecipientId { get; set; }
 
     [ForeignKey("RecipientId")]
     public virtual User? Recipient { get; set; }
