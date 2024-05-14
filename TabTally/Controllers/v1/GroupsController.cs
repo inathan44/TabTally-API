@@ -40,10 +40,30 @@ public class GroupsController : ControllerBase
     }
 
     /*****************************************************************************************************************************
+    // api/v1/Groups/members [GET] - Get all group members DEVELOPMENT/TESTING ONLY
+    ******************************************************************************************************************************/
+    [HttpGet("members")]
+    public ActionResult<List<GroupMember>> GetGroupMembers()
+    {
+        _logger.LogInformation("GetGroupMembers() called");
+
+        try
+        {
+            List<GroupMember> groupMembers = _context.GroupMember.ToList();
+            return groupMembers;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("GetGroupMembers() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /*****************************************************************************************************************************
     // api/v1/groups/create [POST] - Creates a new group
     ******************************************************************************************************************************/
     [HttpPost("create", Name = "CreateGroup")]
-    public ActionResult<GroupWithoutUsersDTO> CreateGroup(CreateGroupDTO group)
+    public ActionResult<GetGroupResponseDTO> CreateGroup(CreateGroupDTO group)
     {
         _logger.LogInformation("CreateGroup() called");
 
@@ -52,82 +72,105 @@ public class GroupsController : ControllerBase
         {
             return StatusCode(403, "Forbidden");
         }
-        try
+        using (var batchTransaction = _context.Database.BeginTransaction())
         {
-            if (group.Name == null || group.Name.Length < 1 || group.Name.Length > 50)
+            try
             {
-                return BadRequest("Group name must be between 1 and 50 characters");
+                if (group.Name == null || group.Name.Length < 1 || group.Name.Length > 50)
+                {
+                    return BadRequest("Group name must be between 1 and 50 characters");
+                }
+                if (group.Description != null && group.Description.Length > 255)
+                {
+                    return BadRequest("Group description must be less than 255 characters");
+                }
+                // begin constructing the group object
+                Group newGroup = new Group
+                {
+                    Name = group.Name,
+                    CreatedById = firebaseUserId,
+                    Description = group.Description,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                };
+
+
+
+                // Add the group to the database so the group member objects can reference the groupID
+                _context.Group.Add(newGroup);
+                _context.SaveChanges();
+
+                int groupId = newGroup.Id;
+
+                // create the group member object for the user who created the group
+                GroupMember newGroupMember = new GroupMember
+                {
+                    GroupId = groupId,
+                    MemberId = firebaseUserId,
+                    IsAdmin = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    Status = GroupMemberStatus.Joined,
+                    InvitedById = firebaseUserId,
+                };
+
+                _context.GroupMember.Add(newGroupMember);
+                _context.SaveChanges();
+
+                batchTransaction.Commit();
+
+                // Shape the response object
+                var groupMembersWithoutUser = new GetGroupGroupMemberDTO
+                {
+                    Id = newGroupMember.Id,
+                    GroupId = newGroupMember.GroupId,
+                    MemberId = newGroupMember.MemberId,
+                    Member = new UserSummaryDTO
+                    {
+                        Id = newGroupMember.Member.Id,
+                        FirstName = newGroupMember.Member.FirstName,
+                        LastName = newGroupMember.Member.LastName,
+                        Username = newGroupMember.Member.Username,
+                        CreatedAt = newGroupMember.Member.CreatedAt,
+                        UpdatedAt = newGroupMember.Member.UpdatedAt
+                    },
+                    InvitedById = newGroupMember.InvitedById,
+                    IsAdmin = newGroupMember.IsAdmin,
+                    Status = newGroupMember.Status,
+                    CreatedAt = newGroupMember.CreatedAt,
+                    UpdatedAt = newGroupMember.UpdatedAt
+                };
+
+                GetGroupResponseDTO response = new GetGroupResponseDTO
+                {
+                    Id = newGroup.Id,
+                    Name = newGroup.Name,
+                    Description = newGroup.Description,
+                    CreatedById = newGroup.CreatedById,
+                    CreatedBy = new UserSummaryDTO
+                    {
+                        Id = newGroup.CreatedBy.Id,
+                        FirstName = newGroup.CreatedBy.FirstName,
+                        LastName = newGroup.CreatedBy.LastName,
+                        Username = newGroup.CreatedBy.Username,
+                        CreatedAt = newGroup.CreatedBy.CreatedAt,
+                        UpdatedAt = newGroup.CreatedBy.UpdatedAt
+                    },
+                    CreatedAt = newGroup.CreatedAt,
+                    UpdatedAt = newGroup.UpdatedAt,
+                    GroupMembers = new List<GetGroupGroupMemberDTO> { groupMembersWithoutUser },
+                    Transactions = new List<TransactionSummaryDTO>()
+                };
+
+                return CreatedAtRoute("GetGroup", new { groupId = newGroup.Id }, response);
+
+
             }
-            if (group.Description != null && group.Description.Length > 255)
+            catch (Exception e)
             {
-                return BadRequest("Group description must be less than 255 characters");
+                _logger.LogError("CreateGroup() failed with exception: {0}", e);
+                return StatusCode(500, $"Internal server error: {e.Message}");
             }
-            // begin constructing the group object
-            Group newGroup = new Group
-            {
-                Name = group.Name,
-                CreatedById = firebaseUserId,
-                Description = group.Description,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-            };
-
-
-
-            // Add the group to the database so the group member objects can reference the groupID
-            _context.Group.Add(newGroup);
-            _context.SaveChanges();
-
-            int groupId = newGroup.Id;
-
-            // create the group member object for the user who created the group
-            GroupMember newGroupMember = new GroupMember
-            {
-                GroupId = groupId,
-                MemberId = firebaseUserId,
-                IsAdmin = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                Status = GroupMemberStatus.Joined,
-                InvitedById = firebaseUserId,
-            };
-
-            _context.GroupMember.Add(newGroupMember);
-            _context.SaveChanges();
-
-
-
-            // Shape the response object
-            var groupMembersWithoutUser = new GroupMembersWithoutUser
-            {
-                GroupId = newGroupMember.GroupId,
-                MemberId = newGroupMember.MemberId,
-                IsAdmin = newGroupMember.IsAdmin,
-                Status = newGroupMember.Status,
-                InvitedById = newGroupMember.InvitedById,
-                CreatedAt = newGroupMember.CreatedAt,
-                UpdatedAt = newGroupMember.UpdatedAt
-            };
-
-            GroupWithoutUsersDTO response = new GroupWithoutUsersDTO
-            {
-                Id = newGroup.Id,
-                Name = newGroup.Name,
-                Description = newGroup.Description,
-                CreatedById = newGroup.CreatedById,
-                CreatedAt = newGroup.CreatedAt,
-                UpdatedAt = newGroup.UpdatedAt,
-                GroupMembers = new List<GroupMembersWithoutUser> { groupMembersWithoutUser }
-            };
-
-            return CreatedAtRoute("CreateGroup", new { id = newGroup.Id }, response);
-
-
-        }
-        catch (Exception e)
-        {
-            _logger.LogError("CreateGroup() failed with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
         }
     }
 
@@ -136,7 +179,7 @@ public class GroupsController : ControllerBase
     // api/v1/groups/{groupId} [GET]
     *****************************************************************************************************************************/
     [HttpGet("{groupId}", Name = "GetGroup")]
-    public ActionResult<GroupWithoutUsersDTO> GetGroup(int groupId)
+    public ActionResult<GetGroupResponseDTO> GetGroup(int groupId)
     {
         _logger.LogInformation("GetGroup() called");
         var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
@@ -156,40 +199,142 @@ public class GroupsController : ControllerBase
             // Check if the user is a member of the group
             GroupMember? groupMember = _context.GroupMember
                 .FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
+
             if (groupMember == null || groupMember.Status != GroupMemberStatus.Joined)
             {
                 return StatusCode(403, "Forbidden: You must be a member of the group to view it");
             }
 
+            _logger.LogInformation("Group found: {0}", group.Name);
+
             // Get the group members
-            List<GroupMembersWithoutUser> groupMembersWithoutUser = new List<GroupMembersWithoutUser>();
-            List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined).ToList();
+            List<GetGroupGroupMemberDTO> groupMembersResponse = new List<GetGroupGroupMemberDTO>();
+            List<GroupMember> groupMembers = _context.GroupMember
+                .Include(gm => gm.Member)
+                .Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined)
+                .ToList();
+
+            _logger.LogInformation("Group members found: {0}", groupMembers.Count);
+
             foreach (var member in groupMembers)
             {
-                GroupMembersWithoutUser groupMemberWithoutUser = new GroupMembersWithoutUser
+                GetGroupGroupMemberDTO gm = new GetGroupGroupMemberDTO
                 {
+                    Id = member.Id,
                     GroupId = member.GroupId,
                     MemberId = member.MemberId,
+                    Member = new UserSummaryDTO
+                    {
+                        Id = member.Member.Id,
+                        FirstName = member.Member.FirstName,
+                        LastName = member.Member.LastName,
+                        Username = member.Member.Username,
+                        CreatedAt = member.Member.CreatedAt,
+                        UpdatedAt = member.Member.UpdatedAt
+                    },
                     IsAdmin = member.IsAdmin,
                     Status = member.Status,
                     InvitedById = member.InvitedById,
                     CreatedAt = member.CreatedAt,
                     UpdatedAt = member.UpdatedAt
                 };
-                groupMembersWithoutUser.Add(groupMemberWithoutUser);
+                groupMembersResponse.Add(gm);
             }
 
+            _logger.LogInformation("Group members response created");
+
+            // Get the group transactions
+            List<Transaction> transactions = _context.Transaction
+                .Where(t => t.GroupId == groupId)
+                .Include(t => t.TransactionDetails)
+                .ToList();
+
+            _logger.LogInformation("Transactions found: {0}", transactions.Count);
+
+            List<TransactionSummaryDTO> transactionsResponse = new List<TransactionSummaryDTO>(
+                transactions.Select(t => new TransactionSummaryDTO
+                {
+                    Id = t.Id,
+                    CreatedById = t.CreatedById,
+                    Amount = t.Amount,
+                    CreatedBy = t.CreatedBy == null ? null : new UserSummaryDTO
+                    {
+                        Id = t.CreatedBy.Id,
+                        FirstName = t.CreatedBy.FirstName,
+                        LastName = t.CreatedBy.LastName,
+                        Username = t.CreatedBy.Username,
+                        CreatedAt = t.CreatedBy.CreatedAt,
+                        UpdatedAt = t.CreatedBy.UpdatedAt
+                    },
+                    payerId = t.PayerId,
+                    Payer = t.Payer == null ? null : new UserSummaryDTO
+                    {
+                        Id = t.Payer.Id,
+                        FirstName = t.Payer.FirstName,
+                        LastName = t.Payer.LastName,
+                        Username = t.Payer.Username,
+                        CreatedAt = t.Payer.CreatedAt,
+                        UpdatedAt = t.Payer.UpdatedAt
+                    },
+                    Description = t.Description,
+                    CreatedAt = t.CreatedAt,
+                    UpdatedAt = t.UpdatedAt,
+                    GroupId = t.GroupId,
+                    TransactionDetails = new List<TransactionDetailsSummaryDTO>(
+                        t.TransactionDetails.Select(td => new TransactionDetailsSummaryDTO
+                        {
+                            Id = td.Id,
+                            TransactionId = td.TransactionId,
+                            PayerId = td.PayerId,
+                            Payer = td.Payer == null ? null : new UserSummaryDTO
+                            {
+                                Id = td.Payer.Id,
+                                FirstName = td.Payer.FirstName,
+                                LastName = td.Payer.LastName,
+                                Username = td.Payer.Username,
+                                CreatedAt = td.Payer.CreatedAt,
+                                UpdatedAt = td.Payer.UpdatedAt
+                            },
+                            RecipientId = td.RecipientId,
+                            Recipient = td.Recipient == null ? null : new UserSummaryDTO
+                            {
+                                Id = td.Recipient.Id,
+                                FirstName = td.Recipient.FirstName,
+                                LastName = td.Recipient.LastName,
+                                Username = td.Recipient.Username,
+                                CreatedAt = td.Recipient.CreatedAt,
+                                UpdatedAt = td.Recipient.UpdatedAt
+                            },
+                            Amount = td.Amount,
+                        }
+
+            ))
+                }));
+
             // Shape the response object
-            GroupWithoutUsersDTO response = new GroupWithoutUsersDTO
+            GetGroupResponseDTO response = new GetGroupResponseDTO
             {
                 Id = group.Id,
                 Name = group.Name,
                 Description = group.Description,
                 CreatedById = group.CreatedById,
+                CreatedBy = new UserSummaryDTO
+                {
+                    Id = group.CreatedBy.Id,
+                    FirstName = group.CreatedBy.FirstName,
+                    LastName = group.CreatedBy.LastName,
+                    Username = group.CreatedBy.Username,
+                    CreatedAt = group.CreatedBy.CreatedAt,
+                    UpdatedAt = group.CreatedBy.UpdatedAt
+                },
                 CreatedAt = group.CreatedAt,
                 UpdatedAt = group.UpdatedAt,
-                GroupMembers = groupMembersWithoutUser
+                GroupMembers = groupMembersResponse,
+                Transactions = transactionsResponse
+
             };
+
+            _logger.LogInformation("Response object created");
 
             return response;
         }
@@ -214,6 +359,12 @@ public class GroupsController : ControllerBase
         {
             return StatusCode(403, "Must be logged in to add members to a group");
         }
+
+        if (members.MemberIds == null || members.MemberIds.Count == 0)
+        {
+            return BadRequest("You must provide at least one member to add to the group");
+        }
+
         try
         {
             // Check if group exists
@@ -223,7 +374,7 @@ public class GroupsController : ControllerBase
                 return NotFound("Group not found");
             }
             // Check if member who is inviting others is part of the group
-            GroupMember? inviter = _context.GroupMember.Find(groupId, firebaseUserId);
+            GroupMember? inviter = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
             if (inviter == null || inviter.Status != GroupMemberStatus.Joined)
             {
                 return StatusCode(403, "Forbidden: You must be a member of the group to add others to it");
@@ -235,48 +386,62 @@ public class GroupsController : ControllerBase
                 User? user = _context.User.Find(memberId);
                 if (user == null)
                 {
-                    return NotFound($"One of the users you tried to add to the group does not exist.");
+                    return NotFound($"One of the users you tried to add to the group does not exist");
                 }
             }
-            // Check if members are already in the group (must have accepted invite to be in the group)
+
             foreach (var memberId in members.MemberIds)
             {
-                GroupMember? member = _context.GroupMember.Find(groupId, memberId);
-                if (member != null && member.Status == GroupMemberStatus.Joined)
+                GroupMember? groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == memberId);
+
+                if (groupMember != null && groupMember.Status == GroupMemberStatus.Joined)
                 {
                     return BadRequest($"A user you tried to add is already in the group");
                 }
-            }
-            // Check to see if the invited user is banned
-            foreach (var memberId in members.MemberIds)
-            {
-                GroupMember? member = _context.GroupMember.Find(groupId, memberId);
-                if (member != null && member.Status == GroupMemberStatus.Banned)
+                if (groupMember != null && groupMember.Status == GroupMemberStatus.Invited)
+                {
+                    return BadRequest($"A user you tried to add has already been invited to the group");
+                }
+                if (groupMember != null && groupMember.Status == GroupMemberStatus.Banned)
                 {
                     return BadRequest($"A user you tried to add is banned from the group");
                 }
-            }
 
-            // Add the members to the group
-            foreach (var memberId in members.MemberIds)
-            {
-                GroupMember newGroupMember = new GroupMember
+                GroupMember? existingGroupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == memberId);
+
+                if (existingGroupMember != null)
                 {
-                    GroupId = groupId,
-                    MemberId = memberId,
-                    IsAdmin = false,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow,
-                    Status = GroupMemberStatus.Invited,
-                    InvitedById = firebaseUserId,
-                };
+                    // Update the existing GroupMember
+                    existingGroupMember.IsAdmin = false;
+                    existingGroupMember.UpdatedAt = DateTime.UtcNow;
+                    existingGroupMember.Status = GroupMemberStatus.Invited;
+                    existingGroupMember.InvitedById = firebaseUserId;
+                }
+                else
+                {
+                    // Create a new GroupMember
+                    GroupMember newGroupMember = new GroupMember
+                    {
+                        GroupId = groupId,
+                        MemberId = memberId,
+                        IsAdmin = false,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow,
+                        Status = GroupMemberStatus.Invited,
+                        InvitedById = firebaseUserId,
+                    };
 
-                _context.GroupMember.Add(newGroupMember);
-                _context.SaveChanges();
+                    _context.GroupMember.Add(newGroupMember);
+                }
+
             }
 
-            // Return 204 No Content, indicating success but no response
-            return NoContent();
+
+
+            _context.SaveChanges();
+
+            int newMembersAdded = members.MemberIds.Count;
+            return Ok($"{newMembersAdded} members added to the group");
 
         }
         catch (Exception e)
@@ -330,7 +495,7 @@ public class GroupsController : ControllerBase
                 _context.SaveChanges();
                 batchTransaction.Commit();
 
-                return NoContent();
+                return Ok("Group deleted");
             }
 
         }
@@ -364,12 +529,35 @@ public class GroupsController : ControllerBase
                 return NotFound("Group not found");
             }
 
+            if (group.Name == null && group.Description == null)
+            {
+                return BadRequest("You must provide a name or description to update the group");
+            }
+
+            if (group.Name != null && (group.Name.Length < 1 || group.Name.Length > 50))
+            {
+                return BadRequest("Group name must be between 1 and 50 characters");
+            }
+
+            if (group.Description != null && group.Description.Length > 255)
+            {
+                return BadRequest("Group description must be less than 255 characters");
+            }
+
+            GroupMember? groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
+
+            if (groupMember == null || groupMember.Status != GroupMemberStatus.Joined)
+            {
+                return StatusCode(403, "Forbidden: You must be a member of the group to update it");
+            }
+
+
             bool createdByUser = groupToUpdate.CreatedById == firebaseUserId;
-            bool isAdmin = _context.GroupMember.Find(groupId, firebaseUserId)?.IsAdmin ?? false;
+            bool isAdmin = groupMember?.IsAdmin == true;
 
             if (!createdByUser && !isAdmin)
             {
-                return StatusCode(403, "Forbidden: You must be the creator of the group or an admin to update it");
+                return StatusCode(403, "Forbidden: You must be an admin of the group to update it");
             }
 
 
@@ -402,55 +590,98 @@ public class GroupsController : ControllerBase
         {
             return StatusCode(403, "Forbidden");
         }
-        try
+
+        using (var batchTransaction = _context.Database.BeginTransaction())
         {
-            // Find group
-            Group? group = _context.Group.Find(groupId);
-            if (group == null)
+            try
             {
-                return NotFound("Group not found");
-            }
-
-            // Find group member
-            GroupMember? groupMember = _context.GroupMember.Find(groupId, firebaseUserId);
-            if (groupMember == null)
-            {
-                return StatusCode(403, "Forbidden: You must be a member of the group to leave it");
-            }
-
-            // Check if the user is the creator of the group
-            if (group.CreatedById == firebaseUserId)
-            {
-                return StatusCode(403, "You cannot leave a group you created. Delete the group instead.");
-            }
-
-            // Check if the user is the last admin
-            if (groupMember.IsAdmin)
-            {
-                List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined && gm.IsAdmin == true).ToList();
-                if (groupMembers.Count == 1)
+                // Find group
+                Group? group = _context.Group.Find(groupId);
+                if (group == null)
                 {
-                    return StatusCode(403, "You are the last admin of the group. Promote another member to admin before leaving.");
+                    return NotFound("Group not found");
                 }
-            }
 
-            // If a user is banned, they cannot "leave" the group (To ensure they can not rejoin)
-            if (groupMember.Status == GroupMemberStatus.Banned)
+                // Find group member
+                GroupMember? groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
+                if (groupMember == null)
+                {
+                    return StatusCode(403, "Forbidden: You must be a member of the group to leave it");
+                }
+
+                // Check if the user is the creator of the group
+                if (group.CreatedById == firebaseUserId)
+                {
+                    return StatusCode(403, "You cannot leave a group you created. Delete the group instead");
+                }
+
+                // Check if the user is the last admin
+                if (groupMember.IsAdmin)
+                {
+                    List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined && gm.IsAdmin == true).ToList();
+                    if (groupMembers.Count == 1)
+                    {
+                        return StatusCode(403, "You are the last admin of the group. Promote another member to admin before leaving");
+                    }
+                }
+
+                // If a user is banned, they cannot "leave" the group (To ensure they can not rejoin)
+                if (groupMember.Status == GroupMemberStatus.Banned)
+                {
+                    return StatusCode(403, "Forbidden: You are banned from the group");
+                }
+
+                if (groupMember.Status != GroupMemberStatus.Joined)
+                {
+                    return BadRequest("You are not in the group");
+                }
+
+                // Change the group member's status to "left"
+                groupMember.Status = GroupMemberStatus.Left;
+                _context.SaveChanges();
+
+                // Remove user information from transaction details
+                List<TransactionDetail> transactionDetails = _context.TransactionDetail.Where(td => td.GroupId == groupId && (td.PayerId == firebaseUserId || td.RecipientId == firebaseUserId)).ToList();
+
+                foreach (var transactionDetail in transactionDetails)
+                {
+                    if (transactionDetail.PayerId == firebaseUserId)
+                    {
+                        transactionDetail.PayerId = null;
+                    }
+                    if (transactionDetail.RecipientId == firebaseUserId)
+                    {
+                        transactionDetail.RecipientId = null;
+                    }
+                }
+                _context.SaveChanges();
+
+                // Remove user information from transactions
+                List<Transaction> transactions = _context.Transaction.Where(t => t.GroupId == groupId && (t.PayerId == firebaseUserId || t.CreatedById == firebaseUserId)).ToList();
+                foreach (var transaction in transactions)
+                {
+                    if (transaction.PayerId == firebaseUserId)
+                    {
+                        transaction.PayerId = null;
+                    }
+                    if (transaction.CreatedById == firebaseUserId)
+                    {
+                        transaction.CreatedById = null;
+                    }
+
+                }
+
+                _context.SaveChanges();
+
+                batchTransaction.Commit();
+
+                return Ok("You have left the group");
+            }
+            catch (Exception e)
             {
-                return StatusCode(403, "You are banned from the group.");
+                _logger.LogError("LeaveGroup() failed with exception: {0}", e);
+                return StatusCode(500, $"Internal server error: {e.Message}");
             }
-
-            // Delete the group member
-            _context.GroupMember.Remove(groupMember);
-
-            _context.SaveChanges();
-
-            return NoContent();
-        }
-        catch (Exception e)
-        {
-            _logger.LogError("LeaveGroup() failed with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
         }
     }
 
@@ -516,21 +747,34 @@ public class GroupsController : ControllerBase
             {
                 return NotFound("Group not found");
             }
+            if (_context.User.Find(userId) == null)
+            {
+                return NotFound("User not found");
+            }
+            if (group.CreatedById == userId)
+            {
+                return StatusCode(403, "You cannot remove the creator of the group");
+            }
 
             bool isCreator = group.CreatedById == firebaseUserId;
-            bool isAdminAndMember = _context.GroupMember.Find(groupId, firebaseUserId)?.IsAdmin == true &&
-                                    _context.GroupMember.Find(groupId, firebaseUserId)?.Status == GroupMemberStatus.Joined;
+            bool isAdminAndMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId)?.IsAdmin == true &&
+                                    _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId)?.Status == GroupMemberStatus.Joined;
             bool removingSelf = firebaseUserId == userId;
+            if (removingSelf)
+            {
+                return StatusCode(403, "You cannot remove yourself from the group. Leave the group instead");
+            }
+
             if (!isCreator && !isAdminAndMember && !removingSelf)
             {
-                return StatusCode(403, "You do not have permission to remove this member from the group");
+                return StatusCode(403, "You must be an admin to remove users from the group");
             }
 
             // Find the member to remove
-            GroupMember? memberToRemove = _context.GroupMember.Find(groupId, userId);
+            GroupMember? memberToRemove = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == userId);
             if (memberToRemove == null)
             {
-                return NotFound("User not found in group");
+                return BadRequest("User not found in group");
             }
             // Check if user is in the group
             if (memberToRemove.Status != GroupMemberStatus.Joined)
@@ -538,11 +782,7 @@ public class GroupsController : ControllerBase
                 return BadRequest("User is not in the group");
             }
 
-            // Check if the user is the creator of the group
-            if (group.CreatedById == userId)
-            {
-                return StatusCode(403, "You cannot remove the creator of the group");
-            }
+
 
             // Check if the user is the last admin
             if (memberToRemove.IsAdmin)
@@ -554,11 +794,12 @@ public class GroupsController : ControllerBase
                 }
             }
 
-            // Remove the member
-            _context.GroupMember.Remove(memberToRemove);
+            // Remove the member by changing their status to "kicked"
+            memberToRemove.IsAdmin = false;
+            memberToRemove.Status = GroupMemberStatus.Kicked;
             _context.SaveChanges();
 
-            return NoContent();
+            return Ok("Member removed from group");
         }
         catch (Exception e)
         {
@@ -632,7 +873,7 @@ public class GroupsController : ControllerBase
             }
 
             // Check role of user
-            GroupMember? groupMember = _context.GroupMember.Find(groupId, firebaseUserId);
+            GroupMember? groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
             if (groupMember == null)
             {
                 return StatusCode(403, "Forbidden: You must be a member of the group to change a member's status");
@@ -660,7 +901,7 @@ public class GroupsController : ControllerBase
             {
                 if (!groupMember.IsAdmin && group.CreatedById != firebaseUserId)
                 {
-                    return StatusCode(403, "Forbidden: You must be an admin or the creator of the group to change a member's status");
+                    return StatusCode(403, "Forbidden: You must be an admin of the group to update it");
                 }
                 if (group.CreatedById == userId)
                 {
@@ -670,14 +911,14 @@ public class GroupsController : ControllerBase
                 {
                     return StatusCode(403, "Forbidden: You cannot change your own status");
                 }
-                GroupMember? memberToChange = _context.GroupMember.Find(groupId, userId);
+                GroupMember? memberToChange = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == userId);
                 if (memberToChange == null)
                 {
                     return NotFound("User not found in group");
                 }
-                if (memberToChange.Status == GroupMemberStatus.Banned || memberToChange.Status == GroupMemberStatus.Invited || memberToChange.Status == GroupMemberStatus.Left || memberToChange.Status == GroupMemberStatus.Declined || memberToChange.Status == GroupMemberStatus.Kicked)
+                if (memberToChange.Status != GroupMemberStatus.Joined)
                 {
-                    return StatusCode(403, "Forbidden: You cannot change the status of a banned, invited, left, declined, or removed user");
+                    return StatusCode(403, "Forbidden: You cannot change the status of a user who is not in the group");
                 }
 
                 // Only allow users to kick or ban users
@@ -702,6 +943,77 @@ public class GroupsController : ControllerBase
         catch (Exception e)
         {
             _logger.LogError("ChangeMemberStatus() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /*****************************************************************************************************************************
+    Promote a member to admin
+    api/v1/groups/{groupId}/promote/{userId} [PUT]
+    *****************************************************************************************************************************/
+    [HttpPut("{groupId}/promote/{userId}", Name = "PromoteMemberToAdmin")]
+    public ActionResult PromoteMemberToAdmin(int groupId, string userId)
+    {
+        _logger.LogInformation("PromoteMemberToAdmin() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+
+        try
+        {
+            // Find the creator of the group
+            Group? group = _context.Group.Find(groupId);
+            if (group == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            User? creator = _context.User.Find(group.CreatedById);
+            if (creator == null)
+            {
+                return NotFound("Creator not found");
+            }
+
+            // Find the promoter
+            GroupMember? promoter = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
+            if (promoter == null || promoter.Status != GroupMemberStatus.Joined)
+            {
+                return StatusCode(403, "Forbidden: You must be a member of the group to promote a member to admin");
+            }
+            if (promoter.MemberId != creator.Id && !promoter.IsAdmin)
+            {
+                return StatusCode(403, "Forbidden: You must be an admin to promote a member to admin");
+            }
+
+            // Find the member to promote
+            GroupMember? memberToPromote = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == userId);
+            if (memberToPromote == null)
+            {
+                return NotFound("User not found in group");
+            }
+            if (memberToPromote.Status != GroupMemberStatus.Joined)
+            {
+                return BadRequest("User is not in the group");
+            }
+
+            // Check if the user is the creator of the group
+            if (group.CreatedById == userId)
+            {
+                return StatusCode(403, "You cannot edit the creator of the group");
+            }
+
+            // Promote the member
+            memberToPromote.IsAdmin = true;
+
+            _context.SaveChanges();
+
+            return Ok("Member promoted to admin");
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("PromoteMemberToAdmin() failed with exception: {0}", e);
             return StatusCode(500, $"Internal server error: {e.Message}");
         }
     }
