@@ -95,135 +95,87 @@ public class TransactionsController : ControllerBase
         {
             return StatusCode(403, "Must be logged in to create a transaction");
         }
-        try
+        using (var batchTransaction = _context.Database.BeginTransaction())
         {
-            if (transactionRequest == null || transactionRequest.Transaction == null || transactionRequest.TransactionDetailsPartial == null)
-            {
-                _logger.LogError("CreateTransaction() called with null request");
-                return BadRequest("Must send a request");
-            }
-
-            _logger.LogInformation("CreateTransaction() called");
-
-            using var dbContextTransaction = _context.Database.BeginTransaction();
             try
             {
-                // If user is not in the group they are trying to create a transaction for, return 403
-                var groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == transactionRequest.Transaction.GroupId && gm.MemberId == firebaseUserId);
-                if (groupMember == null)
+                var group = _context.Group.Find(transactionRequest.GroupId);
+                if (group == null)
+                {
+                    return NotFound("Group not found");
+                }
+
+
+                // Check if user is in the group
+                var groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == transactionRequest.GroupId && gm.MemberId == firebaseUserId);
+                if (groupMember == null || groupMember.Status != GroupMemberStatus.Joined)
                 {
                     return StatusCode(403, "Must be in the group to create a transaction");
                 }
 
-
-                // Check if amounts equal total from transaction
-                if (!_transactionService.TransactionTotalEqualsDetails(transactionRequest.Transaction, transactionRequest.TransactionDetailsPartial))
+                // Check if each recipient is in the group
+                foreach (var transactionDetail in transactionRequest.TransactionDetails)
                 {
-                    return BadRequest("Transaction total does not equal sum of transaction details");
-                }
-
-
-                var group = _context.Group.Find(transactionRequest.Transaction.GroupId);
-                if (group == null)
-                {
-                    return NotFound($"group id does not exist");
-                }
-                var payer = _context.User.Find(transactionRequest.Transaction.PayerId);
-                if (payer == null)
-                {
-                    return NotFound($"payer id does not exist");
-                }
-                var createdBy = _context.User.Find(transactionRequest.Transaction.CreatedBy);
-                if (createdBy == null)
-                {
-                    return NotFound($"created by id does not exist");
-                }
-
-                // Check if payer ID from transaction details matches transaction payer ID
-                if (!_transactionService.DetailsAndTransactionPayersMatch(transactionRequest.Transaction, transactionRequest.TransactionDetailsPartial))
-                {
-                    return BadRequest("Payer ID from transaction details does not match transaction payer ID");
-                }
-
-                // Check that the details match the transaction group
-                if (!_transactionService.DetailsAndTransactionsGroupsMatch(transactionRequest.Transaction, transactionRequest.TransactionDetailsPartial))
-                {
-                    return BadRequest("Transaction group does not match transaction details group");
-                }
-
-                // Each user in transaction details must be in the group, else deny request
-                foreach (var transactionDetailPartial in transactionRequest.TransactionDetailsPartial)
-                {
-                    var groupMemberDetail = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == transactionDetailPartial.GroupId && gm.MemberId == transactionDetailPartial.RecipientId);
-                    if (groupMemberDetail == null)
+                    var recipient = _context.User.Find(transactionDetail.RecipientId);
+                    if (recipient == null)
                     {
-                        return BadRequest("Recipient in transaction details must be in the group");
+                        return NotFound("user not found");
+                    }
+                    var recipientGroupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == transactionRequest.GroupId && gm.MemberId == recipient.Id);
+                    if (recipientGroupMember == null || recipientGroupMember.Status != GroupMemberStatus.Joined)
+                    {
+                        return StatusCode(403, "Recipient must be in the group to create a transaction");
                     }
                 }
 
-                // Add created_at and updated_at timestamps
-                var transactionWithTimestamps = new Transaction
+                if (!_transactionService.TransactionTotalEqualsDetails(transactionRequest.Amount, transactionRequest.TransactionDetails.Select(td => td.Amount)))
                 {
-                    CreatedBy = transactionRequest.Transaction.CreatedBy,
-                    PayerId = transactionRequest.Transaction.PayerId,
-                    Amount = transactionRequest.Transaction.Amount,
-                    Description = transactionRequest.Transaction.Description ?? null,
+                    return BadRequest("Transaction total does not match transaction details total");
+                }
+
+
+
+                // shape the response
+                var newTransaction = new Transaction
+                {
+                    CreatedById = firebaseUserId,
+                    PayerId = transactionRequest.PayerId,
+                    Amount = transactionRequest.Amount,
+                    Description = transactionRequest.Description,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
-                    GroupId = transactionRequest.Transaction.GroupId
+                    GroupId = transactionRequest.GroupId,
                 };
 
-                _context.Transaction.Add(transactionWithTimestamps);
+                _context.Transaction.Add(newTransaction);
                 _context.SaveChanges();
 
-                int transactionId = transactionWithTimestamps.Id; // Get the ID from transactionWithTimestamps
-
-                foreach (var transactionDetailPartial in transactionRequest.TransactionDetailsPartial)
+                foreach (var transactionDetail in transactionRequest.TransactionDetails)
                 {
-                    var transactionDetail = new TransactionDetail
+                    var newTransactionDetail = new TransactionDetail
                     {
-                        PayerId = transactionDetailPartial.PayerId,
-                        RecipientId = transactionDetailPartial.RecipientId,
-                        GroupId = transactionDetailPartial.GroupId,
-                        Amount = transactionDetailPartial.Amount,
-                        TransactionId = transactionId // Use the ID from transactionWithTimestamps
+                        TransactionId = newTransaction.Id,
+                        PayerId = newTransaction.PayerId,
+                        RecipientId = transactionDetail.RecipientId,
+                        GroupId = newTransaction.GroupId,
+                        Amount = transactionDetail.Amount
                     };
-
-                    _context.TransactionDetail.Add(transactionDetail);
-
-                    _context.SaveChanges();
+                    _context.TransactionDetail.Add(newTransactionDetail);
                 }
 
-                dbContextTransaction.Commit();
+                _context.SaveChanges();
+                batchTransaction.Commit();
 
-                Transaction? savedTransaction = _context.Transaction
-                    .Include(t => t.TransactionDetails)
-                    .FirstOrDefault(t => t.Id == transactionWithTimestamps.Id);
+                return Ok("Transaction created successfully");
 
-                if (savedTransaction != null)
-                {
-                    return CreatedAtAction(nameof(GetTransaction), new { id = savedTransaction.Id }, savedTransaction);
-                }
-                else
-                {
-                    return NotFound();
-                }
             }
             catch (Exception e)
             {
-                dbContextTransaction.Rollback();
                 _logger.LogError("CreateTransaction() failed with exception: {0}", e);
+                batchTransaction.Rollback();
                 return StatusCode(500, $"Internal server error: {e.Message}");
             }
-
-
         }
-        catch (Exception e)
-        {
-            _logger.LogError("CreateTransaction() failed with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
-        }
-
     }
 
     /**********************************************************************************************************************
