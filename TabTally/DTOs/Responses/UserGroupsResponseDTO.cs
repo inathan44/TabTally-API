@@ -1,14 +1,3 @@
-public class GetUserGroupsMemberDTO
-{
-    public string Id { get; set; }
-    public string Username { get; set; }
-
-    public string FirstName { get; set; }
-    public string LastName { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public DateTime UpdatedAt { get; set; }
-}
-
 public class GetUserGroupsGroupMemberDTO
 {
     public int Id { get; set; }
@@ -32,7 +21,7 @@ public class GetUserGroupsResponse
 
     public string CreatedById { get; set; }
 
-    public GetUserGroupsMemberDTO CreatedBy { get; set; }
+    public UserSummaryDTO CreatedBy { get; set; }
 
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
