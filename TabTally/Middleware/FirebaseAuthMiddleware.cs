@@ -40,7 +40,7 @@ public class FirebaseAuthMiddleware
                 catch (FirebaseAuthException)
                 {
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    await context.Response.WriteAsync("Unauthorized");
+                    await context.Response.WriteAsync("No valid token provided");
                     return;
                 }
             }
