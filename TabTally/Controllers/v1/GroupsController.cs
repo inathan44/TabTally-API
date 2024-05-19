@@ -29,7 +29,7 @@ public class GroupsController : ControllerBase
 
         try
         {
-            List<Group> groups = _context.Group.ToList();
+            List<Group> groups = _context.Group.Include(g => g.CreatedBy).ToList();
             return groups;
         }
         catch (Exception e)
@@ -673,6 +673,9 @@ public class GroupsController : ControllerBase
 
                 _context.SaveChanges();
 
+                groupMember.IsAdmin = false;
+                _context.SaveChanges();
+
                 batchTransaction.Commit();
 
                 return Ok("You have left the group");
@@ -739,72 +742,109 @@ public class GroupsController : ControllerBase
         {
             return StatusCode(403, "Forbidden");
         }
-        try
+        using (var batchTransaction = _context.Database.BeginTransaction())
         {
-            // Find the group
-            Group? group = _context.Group.Find(groupId);
-            if (group == null)
+            try
             {
-                return NotFound("Group not found");
-            }
-            if (_context.User.Find(userId) == null)
-            {
-                return NotFound("User not found");
-            }
-            if (group.CreatedById == userId)
-            {
-                return StatusCode(403, "You cannot remove the creator of the group");
-            }
-
-            bool isCreator = group.CreatedById == firebaseUserId;
-            bool isAdminAndMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId)?.IsAdmin == true &&
-                                    _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId)?.Status == GroupMemberStatus.Joined;
-            bool removingSelf = firebaseUserId == userId;
-            if (removingSelf)
-            {
-                return StatusCode(403, "You cannot remove yourself from the group. Leave the group instead");
-            }
-
-            if (!isCreator && !isAdminAndMember && !removingSelf)
-            {
-                return StatusCode(403, "You must be an admin to remove users from the group");
-            }
-
-            // Find the member to remove
-            GroupMember? memberToRemove = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == userId);
-            if (memberToRemove == null)
-            {
-                return BadRequest("User not found in group");
-            }
-            // Check if user is in the group
-            if (memberToRemove.Status != GroupMemberStatus.Joined)
-            {
-                return BadRequest("User is not in the group");
-            }
-
-
-
-            // Check if the user is the last admin
-            if (memberToRemove.IsAdmin)
-            {
-                List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined && gm.IsAdmin == true).ToList();
-                if (groupMembers.Count == 1)
+                // Find the group
+                Group? group = _context.Group.Find(groupId);
+                if (group == null)
                 {
-                    return StatusCode(403, "You are trying to remove the last admin of the group. Promote another member to admin before removing.");
+                    return NotFound("Group not found");
                 }
+                if (_context.User.Find(userId) == null)
+                {
+                    return NotFound("User not found");
+                }
+                if (group.CreatedById == userId)
+                {
+                    return StatusCode(403, "You cannot remove the creator of the group");
+                }
+
+                bool isCreator = group.CreatedById == firebaseUserId;
+                bool isAdminAndMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId)?.IsAdmin == true &&
+                                        _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId)?.Status == GroupMemberStatus.Joined;
+                bool removingSelf = firebaseUserId == userId;
+                if (removingSelf)
+                {
+                    return StatusCode(403, "You cannot remove yourself from the group. Leave the group instead");
+                }
+
+                if (!isCreator && !isAdminAndMember && !removingSelf)
+                {
+                    return StatusCode(403, "You must be an admin to remove users from the group");
+                }
+
+                // Find the member to remove
+                GroupMember? memberToRemove = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == userId);
+                if (memberToRemove == null)
+                {
+                    return BadRequest("User not found in group");
+                }
+                // Check if user is in the group
+                if (memberToRemove.Status != GroupMemberStatus.Joined)
+                {
+                    return BadRequest("User is not in the group");
+                }
+
+
+
+                // Check if the user is the last admin
+                if (memberToRemove.IsAdmin)
+                {
+                    List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined && gm.IsAdmin == true).ToList();
+                    if (groupMembers.Count == 1)
+                    {
+                        return StatusCode(403, "You are trying to remove the last admin of the group. Promote another member to admin before removing.");
+                    }
+                }
+
+                // Remove the member by changing their status to "kicked"
+                memberToRemove.IsAdmin = false;
+                memberToRemove.Status = GroupMemberStatus.Kicked;
+                _context.SaveChanges();
+
+                // remove user information from kicked user's transactions and details
+                List<TransactionDetail> transactionDetails = _context.TransactionDetail.Where(td => td.GroupId == groupId && (td.PayerId == userId || td.RecipientId == userId)).ToList();
+                foreach (var transactionDetail in transactionDetails)
+                {
+                    if (transactionDetail.PayerId == userId)
+                    {
+                        transactionDetail.PayerId = null;
+                    }
+                    if (transactionDetail.RecipientId == userId)
+                    {
+                        transactionDetail.RecipientId = null;
+                    }
+                }
+
+                _context.SaveChanges();
+
+                List<Transaction> transactions = _context.Transaction.Where(t => t.GroupId == groupId && (t.PayerId == userId || t.CreatedById == userId)).ToList();
+
+                foreach (var transaction in transactions)
+                {
+                    if (transaction.PayerId == userId)
+                    {
+                        transaction.PayerId = null;
+                    }
+                    if (transaction.CreatedById == userId)
+                    {
+                        transaction.CreatedById = null;
+                    }
+                }
+
+                _context.SaveChanges();
+
+                batchTransaction.Commit();
+
+                return Ok("Member removed from group");
             }
-
-            // Remove the member by changing their status to "kicked"
-            memberToRemove.IsAdmin = false;
-            memberToRemove.Status = GroupMemberStatus.Kicked;
-            _context.SaveChanges();
-
-            return Ok("Member removed from group");
-        }
-        catch (Exception e)
-        {
-            _logger.LogError("RemoveMember() failed with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
+            catch (Exception e)
+            {
+                _logger.LogError("RemoveMember() failed with exception: {0}", e);
+                return StatusCode(500, $"Internal server error: {e.Message}");
+            }
         }
     }
 
@@ -863,87 +903,148 @@ public class GroupsController : ControllerBase
             return StatusCode(403, "Forbidden");
         }
 
-
-        try
+        using (var batchTransaction = _context.Database.BeginTransaction())
         {
-            Group? group = _context.Group.Find(groupId);
-            if (group == null)
+            try
             {
-                return NotFound("Group not found");
-            }
+                Group? group = _context.Group.Find(groupId);
+                if (group == null)
+                {
+                    return NotFound("Group not found");
+                }
 
-            // Check role of user
-            GroupMember? groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
-            if (groupMember == null)
-            {
-                return StatusCode(403, "Forbidden: You must be a member of the group to change a member's status");
-            }
+                // Check role of user
+                GroupMember? groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
+                if (groupMember == null)
+                {
+                    return NotFound("User not found in group");
+                }
 
-            if (groupMember.Status == GroupMemberStatus.Banned)
-            {
-                return StatusCode(403, "Forbidden: you are banned from the group");
-            }
-            else if (groupMember.Status == GroupMemberStatus.Invited)
-            {
-                // an invited user can only accept or decline their own invite
-                if (firebaseUserId != userId)
-                {
-                    return StatusCode(403, "Forbidden: You must accept or decline your own invite");
-                }
-                if (newStatus != GroupMemberStatus.Joined && newStatus != GroupMemberStatus.Declined)
-                {
-                    return BadRequest("Forbidden: You can only accept or decline an invite");
-                }
-                groupMember.Status = newStatus;
-                groupMember.UpdatedAt = DateTime.UtcNow;
-            }
-            else if (groupMember.Status == GroupMemberStatus.Joined)
-            {
-                if (!groupMember.IsAdmin && group.CreatedById != firebaseUserId)
-                {
-                    return StatusCode(403, "Forbidden: You must be an admin of the group to update it");
-                }
-                if (group.CreatedById == userId)
-                {
-                    return StatusCode(403, "Forbidden: You cannot change the status of the creator of the group");
-                }
-                if (groupMember.MemberId == userId)
-                {
-                    return StatusCode(403, "Forbidden: You cannot change your own status");
-                }
                 GroupMember? memberToChange = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == userId);
                 if (memberToChange == null)
                 {
                     return NotFound("User not found in group");
                 }
-                if (memberToChange.Status != GroupMemberStatus.Joined)
+
+
+
+                // Creator has global permissions
+                bool isCreator = group.CreatedById == firebaseUserId;
+
+                // ***************************** Separate logic for different user statuses *****************************
+                if (groupMember.Status == GroupMemberStatus.Banned)
                 {
-                    return StatusCode(403, "Forbidden: You cannot change the status of a user who is not in the group");
+                    return StatusCode(403, "You are banned from the group");
                 }
 
-                // Only allow users to kick or ban users
-                if (newStatus != GroupMemberStatus.Kicked && newStatus != GroupMemberStatus.Banned)
+
+                else if (groupMember.Status == GroupMemberStatus.Invited)
                 {
-                    return BadRequest("Forbidden: You can only kick or ban a user");
+                    // an invited user can only accept or decline their own invite
+                    if (firebaseUserId != userId || firebaseUserId != memberToChange.MemberId)
+                    {
+                        return StatusCode(403, "You can not change the status of another user");
+                    }
+                    if (newStatus != GroupMemberStatus.Joined && newStatus != GroupMemberStatus.Declined)
+                    {
+                        return StatusCode(403, "You can only accept or decline an invite");
+                    }
+                    groupMember.Status = newStatus;
+                    groupMember.UpdatedAt = DateTime.UtcNow;
+                    _context.SaveChanges();
+                    batchTransaction.Commit();
+                    return Ok("Member status changed");
                 }
-                memberToChange.Status = newStatus;
-                memberToChange.UpdatedAt = DateTime.UtcNow;
+
+                else if (groupMember.Status == GroupMemberStatus.Joined)
+                {
+                    if (!groupMember.IsAdmin && !isCreator)
+                    {
+                        if (!(memberToChange.Status == GroupMemberStatus.Invited && newStatus == GroupMemberStatus.Kicked && memberToChange.InvitedById == firebaseUserId))
+                        {
+                            return StatusCode(403, "You must be an admin of the group to update it");
+                        }
+                    }
+                    if (group.CreatedById == userId)
+                    {
+                        return StatusCode(403, "You cannot change the status of the creator of the group");
+                    }
+                    if (groupMember.MemberId == userId)
+                    {
+                        return StatusCode(403, "You cannot change your own status");
+                    }
+
+                    if (memberToChange.IsAdmin && !isCreator)
+                    {
+                        return StatusCode(403, "You cannot change the status of an admin");
+                    }
+
+
+
+                    // ********************* Logic for memberToChange statuses *********************
+                    if (memberToChange.Status == GroupMemberStatus.Declined)
+                    {
+                        return StatusCode(403, "You cannot change the status of a user who is not in the group");
+                    }
+                    // ADD LOGIC TO REVOKE AN INVITE
+                    else if (memberToChange.Status == GroupMemberStatus.Invited)
+                    {
+                        if (newStatus != GroupMemberStatus.Kicked)
+                        {
+
+                            return StatusCode(403, "You cannot change the status of a user who is not in the group");
+                        }
+                    }
+                    else if (memberToChange.Status == GroupMemberStatus.Kicked)
+                    {
+                        return StatusCode(403, "You cannot change the status of a user who is not in the group");
+                    }
+                    else if (memberToChange.Status == GroupMemberStatus.Left)
+                    {
+                        return StatusCode(403, "You cannot change the status of a user who is not in the group");
+                    }
+                    else if (memberToChange.Status == GroupMemberStatus.Banned)
+                    {
+                        if (newStatus != GroupMemberStatus.Kicked)
+                        {
+                            return StatusCode(403, "you can only unban this user");
+                        }
+                    }
+                    else if (memberToChange.Status == GroupMemberStatus.Joined)
+                    {
+                        if (newStatus != GroupMemberStatus.Kicked && newStatus != GroupMemberStatus.Banned)
+                        {
+                            return StatusCode(403, "You can only kick or ban this user");
+                        }
+                    }
+                    else
+                    {
+                        return StatusCode(403, "You cannot change the status of a user who is not in the group");
+                    }
+
+
+                    memberToChange.Status = newStatus;
+                    _context.SaveChanges();
+
+                    memberToChange.UpdatedAt = DateTime.UtcNow;
+                    _context.SaveChanges();
+
+                    if (newStatus == GroupMemberStatus.Banned || newStatus == GroupMemberStatus.Kicked)
+                    {
+                        memberToChange.IsAdmin = false;
+                        _context.SaveChanges();
+                    }
+                }
+
+                batchTransaction.Commit();
+
+                return Ok("Member status changed");
             }
-            else
+            catch (Exception e)
             {
-                return StatusCode(403, "Forbidden: You must be a member of the group to change a member's status");
+                _logger.LogError("ChangeMemberStatus() failed with exception: {0}", e);
+                return StatusCode(500, $"Internal server error: {e.Message}");
             }
-
-
-
-            _context.SaveChanges();
-
-            return NoContent();
-        }
-        catch (Exception e)
-        {
-            _logger.LogError("ChangeMemberStatus() failed with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
         }
     }
 
@@ -980,11 +1081,11 @@ public class GroupsController : ControllerBase
             GroupMember? promoter = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
             if (promoter == null || promoter.Status != GroupMemberStatus.Joined)
             {
-                return StatusCode(403, "Forbidden: You must be a member of the group to promote a member to admin");
+                return StatusCode(403, "You must be a member of the group to promote a member to admin");
             }
             if (promoter.MemberId != creator.Id && !promoter.IsAdmin)
             {
-                return StatusCode(403, "Forbidden: You must be an admin to promote a member to admin");
+                return StatusCode(403, "You must be an admin to promote a member to admin");
             }
 
             // Find the member to promote
@@ -1016,6 +1117,149 @@ public class GroupsController : ControllerBase
             _logger.LogError("PromoteMemberToAdmin() failed with exception: {0}", e);
             return StatusCode(500, $"Internal server error: {e.Message}");
         }
+    }
+
+    /*****************************************************************************************************************************
+    Demote an admin to member
+    api/v1/groups/{groupId}/demote/{userId} [PUT]
+    *****************************************************************************************************************************/
+    [HttpPut("{groupId}/demote/{userId}", Name = "DemoteAdminToMember")]
+    public ActionResult DemoteAdminToMember(int groupId, string userId)
+    {
+        _logger.LogInformation("DemoteAdminToMember() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+
+        try
+        {
+            // Find the creator of the group
+            Group? group = _context.Group.Find(groupId);
+            if (group == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            User? creator = _context.User.Find(group.CreatedById);
+            if (creator == null)
+            {
+                return NotFound("Creator not found");
+            }
+
+            // Find the demoter
+            GroupMember? demoter = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
+            if (demoter == null || demoter.MemberId != group.CreatedById)
+            {
+                return StatusCode(403, "You must be the creator of the group to demote an admin to member");
+            }
+
+
+
+
+            // Find the member to demote
+            GroupMember? memberToDemote = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == userId);
+            if (memberToDemote == null)
+            {
+                return NotFound("User not found in group");
+            }
+            if (memberToDemote.Status != GroupMemberStatus.Joined)
+            {
+                return BadRequest("User not found in group");
+            }
+
+            // Check if the user is the creator of the group
+            if (group.CreatedById == userId)
+            {
+                return StatusCode(403, "You cannot edit the creator of the group");
+            }
+
+            if (!memberToDemote.IsAdmin)
+            {
+                return BadRequest("User is already a member");
+            }
+
+            // Demote the member
+            memberToDemote.IsAdmin = false;
+
+            _context.SaveChanges();
+
+            return Ok("Admin demoted to member");
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("DemoteAdminToMember() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+    /*****************************************************************************************************************************
+    Transfer ownership of a group
+    api/v1/groups/{groupId}/transferownership/{userId} [PUT]
+    *****************************************************************************************************************************/
+    [HttpPut("{groupId}/transferownership/{userId}", Name = "TransferOwnership")]
+    public ActionResult TransferOwnership(int groupId, string userId)
+    {
+        _logger.LogInformation("TransferOwnership() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+        using (var batchTransaction = _context.Database.BeginTransaction())
+        {
+            try
+            {
+                var group = _context.Group.Find(groupId);
+                if (group == null)
+                {
+                    return NotFound("Group not found");
+                }
+
+                var currentOwner = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == group.CreatedById);
+                if (currentOwner == null || currentOwner.Status != GroupMemberStatus.Joined)
+                {
+                    return NotFound("Current owner not found");
+                }
+
+                var newOwner = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == userId);
+                if (newOwner == null || newOwner.Status != GroupMemberStatus.Joined)
+                {
+                    return NotFound("User is not in the group");
+                }
+
+                if (group.CreatedById != firebaseUserId)
+                {
+                    return StatusCode(403, "You must be the creator of the group to transfer ownership");
+                }
+
+
+                if (group.CreatedById == userId)
+                {
+                    return StatusCode(403, "User is already the owner of the group");
+                }
+
+                // Assign the new owner
+                group.CreatedById = userId;
+                _context.SaveChanges();
+
+                newOwner.IsAdmin = true;
+                _context.SaveChanges();
+
+                batchTransaction.Commit();
+
+                return Ok("Ownership transferred");
+            }
+            catch (Exception e)
+            {
+                _logger.LogError("TransferOwnership() failed with exception: {0}", e);
+                return StatusCode(500, $"Internal server error: {e.Message}");
+            }
+        }
+
+
+
     }
 
 }
