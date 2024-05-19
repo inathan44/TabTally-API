@@ -6,7 +6,7 @@ public class CreateTransactionRequest
     public decimal Amount { get; set; }
     public int GroupId { get; set; }
 
-    public string Description { get; set; }
+    public string? Description { get; set; }
     public List<CreateTransactionTransactionDetailDTO> TransactionDetails { get; set; }
 }
 
