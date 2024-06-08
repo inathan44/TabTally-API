@@ -11,11 +11,6 @@ public class TransactionDetail
     [Required]
     public int TransactionId { get; set; }
 
-    public string? PayerId { get; set; }
-
-    [ForeignKey("PayerId")]
-    public virtual User? Payer { get; set; }
-
     public string? RecipientId { get; set; }
 
     [ForeignKey("RecipientId")]

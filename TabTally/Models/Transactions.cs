@@ -19,7 +19,7 @@ public class Transaction
     public virtual User? Payer { get; set; }
 
     [Required]
-    [Range(0, 999999999)]
+    [Range(-999999999, 999999999)]
     public decimal Amount { get; set; }
 
     [MaxLength(255)]
@@ -37,6 +37,10 @@ public class Transaction
     [ForeignKey("GroupId")]
     public virtual Group? Group { get; set; }
 
-    public ICollection<TransactionDetail>? TransactionDetails { get; set; }
+    public ICollection<TransactionDetail> TransactionDetails { get; set; }
 
+    public Transaction()
+    {
+        TransactionDetails = new List<TransactionDetail>();
+    }
 }
