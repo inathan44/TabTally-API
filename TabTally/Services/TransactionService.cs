@@ -10,5 +10,10 @@ public class TransactionService
         return total == transactionAmount;
     }
 
+    public bool IsRepaymentTransaction(decimal transactionAmount, IEnumerable<Decimal> transactionDetailsAmounts)
+    {
+        return transactionAmount < 0 && TransactionTotalEqualsDetails(transactionAmount, transactionDetailsAmounts);
+    }
+
 
 }

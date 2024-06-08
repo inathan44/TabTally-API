@@ -25,6 +25,10 @@ public class UsersController : ControllerBase
     [HttpGet]
     public ActionResult<List<User>> GetUsers()
     {
+        if (Environment.GetEnvironmentVariable("ENVIRONMENT") != "development")
+        {
+            return StatusCode(403, "Forbidden");
+        }
         _logger.LogInformation("GetUsers() called");
 
         try
@@ -323,32 +327,32 @@ public class UsersController : ControllerBase
     /************************************************************************************************************
     // api/v1/Users [Get] - Retrieves a user's transactions
     ************************************************************************************************************/
-    [HttpGet("transactions", Name = "GetUserTransactions")]
-    public ActionResult<List<Transaction>> GetUserTransactions()
-    {
-        _logger.LogInformation("GetUserTransactions() called");
-        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
-        if (firebaseUserId == null)
-        {
-            return StatusCode(403, "Forbidden");
-        }
+    // [HttpGet("transactions", Name = "GetUserTransactions")]
+    // public ActionResult<List<Transaction>> GetUserTransactions()
+    // {
+    //     _logger.LogInformation("GetUserTransactions() called");
+    //     var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+    //     if (firebaseUserId == null)
+    //     {
+    //         return StatusCode(403, "Forbidden");
+    //     }
 
-        try
-        {
-            // Find all transaction details that include the user as recipient or payer
-            var transactions = _context.Transaction
-                .Include(t => t.TransactionDetails)
-                .Where(t => t.TransactionDetails.Any(td => td.PayerId == firebaseUserId || td.RecipientId == firebaseUserId))
-                .ToList();
+    //     try
+    //     {
+    //         // Find all transaction details that include the user as recipient or payer
+    //         var transactions = _context.Transaction
+    //             .Include(t => t.TransactionDetails)
+    //             .Where(t => t.TransactionDetails.Any(td => td.PayerId == firebaseUserId || td.RecipientId == firebaseUserId))
+    //             .ToList();
 
 
 
-            return transactions;
-        }
-        catch (Exception e)
-        {
-            _logger.LogError("GetUserTransactions() failed with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
-        }
-    }
+    //         return transactions;
+    //     }
+    //     catch (Exception e)
+    //     {
+    //         _logger.LogError("GetUserTransactions() failed with exception: {0}", e);
+    //         return StatusCode(500, $"Internal server error: {e.Message}");
+    //     }
+    // }
 }

@@ -16,7 +16,7 @@ public class FirebaseAuthMiddleware
         // Routes that do not require authentication (Some are for testing purposes and should be revoked in prod)
         if (Environment.GetEnvironmentVariable("ENVIRONMENT") == "development")
         {
-            var excludedPaths = new[] { "/api/v1/Users", "/api/v1/Groups", "/api/v1/Groups/members" };
+            var excludedPaths = new[] { "/api/v1/Users", "/api/v1/Groups", "/api/v1/Groups/members", "/api/v1/Transactions/details", "/api/v1/Transactions" };
             if (excludedPaths.Any(path => context.Request.Path.Equals(path, StringComparison.OrdinalIgnoreCase)))
             {
                 logger.LogInformation("Path does not require authentication: {path}", context.Request.Path);

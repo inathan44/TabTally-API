@@ -6,7 +6,7 @@ public class TransactionSummaryDTO
 
     public UserSummaryDTO? CreatedBy { get; set; }
 
-    public string? payerId { get; set; }
+    public string? PayerId { get; set; }
 
     public UserSummaryDTO? Payer { get; set; }
     public string? Description { get; set; }

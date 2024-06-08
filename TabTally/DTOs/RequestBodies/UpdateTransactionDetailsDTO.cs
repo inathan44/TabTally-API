@@ -4,6 +4,6 @@ public class UpdateTransactionDetailsDTO
 {
     public string RecipientId { get; set; }
 
-    [Range(0, 999999999)]
+    [Range(-999999999, 999999999)]
     public decimal Amount { get; set; }
 }

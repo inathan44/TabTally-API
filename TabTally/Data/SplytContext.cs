@@ -39,15 +39,6 @@ public class SplytContext : DbContext
             .OnDelete(DeleteBehavior.SetNull)
             .IsRequired(false);
 
-
-        // Set up optional relationship between TransactionDetail and User
-        modelBuilder.Entity<TransactionDetail>()
-            .HasOne(td => td.Payer)
-            .WithMany()
-            .HasForeignKey(td => td.PayerId)
-            .OnDelete(DeleteBehavior.SetNull)
-            .IsRequired(false);
-
         modelBuilder.Entity<TransactionDetail>()
             .HasOne(td => td.Recipient)
             .WithMany()

@@ -25,6 +25,10 @@ public class GroupsController : ControllerBase
     public ActionResult<List<Group>> GetGroups()
     {
 
+        if (Environment.GetEnvironmentVariable("ENVIRONMENT") != "development")
+        {
+            return StatusCode(403, "Forbidden");
+        }
         _logger.LogInformation("GetGroups() called");
 
         try
@@ -45,6 +49,10 @@ public class GroupsController : ControllerBase
     [HttpGet("members")]
     public ActionResult<List<GroupMember>> GetGroupMembers()
     {
+        if (Environment.GetEnvironmentVariable("ENVIRONMENT") != "development")
+        {
+            return StatusCode(403, "Forbidden");
+        }
         _logger.LogInformation("GetGroupMembers() called");
 
         try
@@ -266,7 +274,7 @@ public class GroupsController : ControllerBase
                         CreatedAt = t.CreatedBy.CreatedAt,
                         UpdatedAt = t.CreatedBy.UpdatedAt
                     },
-                    payerId = t.PayerId,
+                    PayerId = t.PayerId,
                     Payer = t.Payer == null ? null : new UserSummaryDTO
                     {
                         Id = t.Payer.Id,
@@ -285,16 +293,6 @@ public class GroupsController : ControllerBase
                         {
                             Id = td.Id,
                             TransactionId = td.TransactionId,
-                            PayerId = td.PayerId,
-                            Payer = td.Payer == null ? null : new UserSummaryDTO
-                            {
-                                Id = td.Payer.Id,
-                                FirstName = td.Payer.FirstName,
-                                LastName = td.Payer.LastName,
-                                Username = td.Payer.Username,
-                                CreatedAt = td.Payer.CreatedAt,
-                                UpdatedAt = td.Payer.UpdatedAt
-                            },
                             RecipientId = td.RecipientId,
                             Recipient = td.Recipient == null ? null : new UserSummaryDTO
                             {
@@ -641,14 +639,10 @@ public class GroupsController : ControllerBase
                 _context.SaveChanges();
 
                 // Remove user information from transaction details
-                List<TransactionDetail> transactionDetails = _context.TransactionDetail.Where(td => td.GroupId == groupId && (td.PayerId == firebaseUserId || td.RecipientId == firebaseUserId)).ToList();
+                List<TransactionDetail> transactionDetails = _context.TransactionDetail.Where(td => td.GroupId == groupId && (td.RecipientId == firebaseUserId)).ToList();
 
                 foreach (var transactionDetail in transactionDetails)
                 {
-                    if (transactionDetail.PayerId == firebaseUserId)
-                    {
-                        transactionDetail.PayerId = null;
-                    }
                     if (transactionDetail.RecipientId == firebaseUserId)
                     {
                         transactionDetail.RecipientId = null;
@@ -805,13 +799,9 @@ public class GroupsController : ControllerBase
                 _context.SaveChanges();
 
                 // remove user information from kicked user's transactions and details
-                List<TransactionDetail> transactionDetails = _context.TransactionDetail.Where(td => td.GroupId == groupId && (td.PayerId == userId || td.RecipientId == userId)).ToList();
+                List<TransactionDetail> transactionDetails = _context.TransactionDetail.Where(td => td.GroupId == groupId && (td.RecipientId == userId)).ToList();
                 foreach (var transactionDetail in transactionDetails)
                 {
-                    if (transactionDetail.PayerId == userId)
-                    {
-                        transactionDetail.PayerId = null;
-                    }
                     if (transactionDetail.RecipientId == userId)
                     {
                         transactionDetail.RecipientId = null;
