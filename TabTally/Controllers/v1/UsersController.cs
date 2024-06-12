@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using FirebaseAdmin.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -62,6 +63,12 @@ public class UsersController : ControllerBase
         }
     }
 
+
+
+
+    /************************************************************************************************************
+    NEEDED: ADD FIREBASE INTO THIS ROUTE AS EMAIL CHANGES NEEDS TO ALSO BE CHANGED IN FIREBASE
+
     /************************************************************************************************************
     // api/v1/Users/id/update [Put] - update the user object
     ************************************************************************************************************/
@@ -75,49 +82,81 @@ public class UsersController : ControllerBase
         // Users can only update their own user record
         if (firebaseUserId != id)
         {
-            return StatusCode(403, "Forbidden: can only update your own user record");
+            return StatusCode(403, "can only update your own user");
         }
 
-        try
+        using (var batchTransaction = _context.Database.BeginTransaction())
         {
+            try
+            {
 
-            var existingUser = _context.User.FirstOrDefault(u => u.Id == firebaseUserId);
-            if (existingUser == null)
-            {
-                return NotFound("User not found when updating: " + firebaseUserId);
-            }
+                var existingUser = _context.User.FirstOrDefault(u => u.Id == firebaseUserId);
+                if (existingUser == null)
+                {
+                    return NotFound("User not found when updating: " + firebaseUserId);
+                }
 
-            // Add regex to ensure alphanumeric characters only, no profanity, etc.
-            if (user.Username != null)
-            {
-                existingUser.Username = user.Username;
-            }
-            // Add regex to ensure valid email format
-            if (user.Email != null)
-            {
-                existingUser.Email = user.Email;
-            }
-            // Can not be empty string
-            if (user.FirstName != null)
-            {
-                existingUser.FirstName = user.FirstName;
-            }
-            // Can not be empty string
-            if (user.LastName != null)
-            {
-                existingUser.LastName = user.LastName;
-            }
-            existingUser.UpdatedAt = DateTime.UtcNow;
+                // Add regex to ensure alphanumeric characters only, no profanity, etc.
+                if (user.Username != null)
+                {
 
-            _context.User.Update(existingUser);
-            _context.SaveChanges();
+                    var existingUserWithSameUsername = _context.User.FirstOrDefault(u => u.Username.ToLower() == user.Username.ToLower());
+                    if (existingUserWithSameUsername != null)
+                    {
+                        return BadRequest("Username already in use");
+                    }
 
-            return NoContent();
-        }
-        catch (Exception e)
-        {
-            _logger.LogError("UpdateUser() failed with exception: {0}", e);
-            return StatusCode(500, $"Internal server error: {e.Message}");
+
+                    Regex usernameRegex = new Regex(@"^[a-zA-Z0-9\.\-_]+$");
+                    if (!usernameRegex.IsMatch(user.Username))
+                    {
+                        return BadRequest("Invalid username");
+                    }
+                    existingUser.Username = user.Username;
+                    _context.SaveChanges();
+                }
+                // Add regex to ensure valid email format
+                if (user.Email != null)
+                {
+                    // Use regex to validate email format
+                    string emailPattern = @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$";
+                    if (!Regex.IsMatch(user.Email, emailPattern))
+                    {
+                        return BadRequest("Invalid email");
+                    }
+
+                    if (_context.User.Any(u => u.Email == user.Email))
+                    {
+                        return BadRequest("Email already in use");
+                    }
+
+                    existingUser.Email = user.Email;
+                    _context.SaveChanges();
+                }
+                // Can not be empty string
+                if (user.FirstName != null)
+                {
+                    existingUser.FirstName = user.FirstName;
+                    _context.SaveChanges();
+                }
+                // Can not be empty string
+                if (user.LastName != null)
+                {
+                    existingUser.LastName = user.LastName;
+                    _context.SaveChanges();
+                }
+                existingUser.UpdatedAt = DateTime.UtcNow;
+                _context.SaveChanges();
+
+                batchTransaction.Commit();
+
+                return Ok("User updated");
+            }
+            catch (Exception e)
+            {
+                _logger.LogError("UpdateUser() failed with exception: {0}", e);
+                return StatusCode(500, $"Internal server error: {e.Message}");
+            }
         }
     }
     /************************************************************************************************************
@@ -224,10 +263,12 @@ public class UsersController : ControllerBase
                 await auth.DeleteUserAsync(firebaseUserId);
 
                 // If the Firebase operation succeeded, commit the transaction
+                _context.User.Remove(existingUser);
+                _context.SaveChanges();
                 batchTransaction.Commit();
 
                 _logger.LogInformation("User deleted: {0}", firebaseUserId);
-                return NoContent();
+                return Ok("User deleted");
             }
             catch (FirebaseAuthException e)
             {
