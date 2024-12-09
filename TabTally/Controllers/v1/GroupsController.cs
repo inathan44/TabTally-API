@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -80,6 +81,10 @@ public class GroupsController : ControllerBase
         {
             return StatusCode(403, "Forbidden");
         }
+        if (group.Description == "")
+        {
+            group.Description = null;
+        }
         using (var batchTransaction = _context.Database.BeginTransaction())
         {
             try
@@ -126,6 +131,24 @@ public class GroupsController : ControllerBase
                 _context.SaveChanges();
 
                 batchTransaction.Commit();
+
+                // Get the foreign key objects
+                newGroupMember = _context.GroupMember
+                  .Include(gm => gm.Member)
+                  .FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId)!;
+
+                if (newGroupMember == null)
+                {
+                    return StatusCode(500, "Internal server error: Could not find the group member");
+                }
+
+                newGroup = _context.Group
+                    .Include(g => g.CreatedBy)
+                    .FirstOrDefault(g => g.Id == groupId)!;
+                if (newGroup == null)
+                {
+                    return StatusCode(500, "Internal server error: Could not find the group");
+                }
 
                 // Shape the response object
                 var groupMembersWithoutUser = new GetGroupGroupMemberDTO
@@ -332,7 +355,7 @@ public class GroupsController : ControllerBase
 
             };
 
-            _logger.LogInformation("Response object created");
+
 
             return response;
         }
@@ -358,95 +381,49 @@ public class GroupsController : ControllerBase
             return StatusCode(403, "Must be logged in to add members to a group");
         }
 
-        if (members.MemberIds == null || members.MemberIds.Count == 0)
+
+        if (members == null || members.InvitedMembers == null || members.InvitedMembers.Count == 0)
         {
-            return BadRequest("You must provide at least one member to add to the group");
+            return Ok("No members to add");
         }
+
+        // if user invited themselves, filter them out
+        members.InvitedMembers = members.InvitedMembers.Where(m => m.Id != firebaseUserId).ToList();
 
         try
         {
             // Check if group exists
-            Group? group = _context.Group.Find(groupId);
+            var group = _context.Group.Find(groupId);
             if (group == null)
             {
                 return NotFound("Group not found");
             }
-            // Check if member who is inviting others is part of the group
-            GroupMember? inviter = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
-            if (inviter == null || inviter.Status != GroupMemberStatus.Joined)
+
+            // Add members to the group
+            foreach (var invitedMember in members.InvitedMembers)
             {
-                return StatusCode(403, "Forbidden: You must be a member of the group to add others to it");
+                GroupMember newGroupMember = new GroupMember
+                {
+                    GroupId = groupId,
+                    MemberId = invitedMember.Id,
+                    IsAdmin = invitedMember.Role.Equals("admin", StringComparison.OrdinalIgnoreCase),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    Status = GroupMemberStatus.Invited,
+                    InvitedById = firebaseUserId,
+                };
+                _context.GroupMember.Add(newGroupMember);
             }
-
-            // Check if the members to be added are on the platform
-            foreach (var memberId in members.MemberIds)
-            {
-                User? user = _context.User.Find(memberId);
-                if (user == null)
-                {
-                    return NotFound($"One of the users you tried to add to the group does not exist");
-                }
-            }
-
-            foreach (var memberId in members.MemberIds)
-            {
-                GroupMember? groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == memberId);
-
-                if (groupMember != null && groupMember.Status == GroupMemberStatus.Joined)
-                {
-                    return BadRequest($"A user you tried to add is already in the group");
-                }
-                if (groupMember != null && groupMember.Status == GroupMemberStatus.Invited)
-                {
-                    return BadRequest($"A user you tried to add has already been invited to the group");
-                }
-                if (groupMember != null && groupMember.Status == GroupMemberStatus.Banned)
-                {
-                    return BadRequest($"A user you tried to add is banned from the group");
-                }
-
-                GroupMember? existingGroupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == memberId);
-
-                if (existingGroupMember != null)
-                {
-                    // Update the existing GroupMember
-                    existingGroupMember.IsAdmin = false;
-                    existingGroupMember.UpdatedAt = DateTime.UtcNow;
-                    existingGroupMember.Status = GroupMemberStatus.Invited;
-                    existingGroupMember.InvitedById = firebaseUserId;
-                }
-                else
-                {
-                    // Create a new GroupMember
-                    GroupMember newGroupMember = new GroupMember
-                    {
-                        GroupId = groupId,
-                        MemberId = memberId,
-                        IsAdmin = false,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow,
-                        Status = GroupMemberStatus.Invited,
-                        InvitedById = firebaseUserId,
-                    };
-
-                    _context.GroupMember.Add(newGroupMember);
-                }
-
-            }
-
-
 
             _context.SaveChanges();
-
-            int newMembersAdded = members.MemberIds.Count;
-            return Ok($"{newMembersAdded} members added to the group");
-
+            return Ok("Members added to the group");
         }
         catch (Exception e)
         {
             _logger.LogError("AddMembersToGroup() failed with exception: {0}", e);
             return StatusCode(500, $"Internal server error: {e.Message}");
         }
+
     }
 
     /*****************************************************************************************************************************

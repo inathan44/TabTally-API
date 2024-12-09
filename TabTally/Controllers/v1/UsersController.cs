@@ -45,16 +45,31 @@ public class UsersController : ControllerBase
 
     // api/v1/users/create [POST] - Creates a new user
     [HttpPost("create", Name = "CreateUser")]
-    public ActionResult<User> CreateUser(User user)
+    public ActionResult CreateUser(CreateUserRequestDTO newUser)
     {
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return BadRequest("Need firebase token to create user");
+        }
         try
         {
             _logger.LogInformation("CreateUser() called");
 
-            _context.User.Add(user);
+            User createdUser = new User()
+            {
+                Id = firebaseUserId,
+                Username = newUser.Username,
+                Email = newUser.Email,
+                FirstName = newUser.FirstName,
+                LastName = newUser.LastName,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.User.Add(createdUser);
             _context.SaveChanges();
 
-            return CreatedAtRoute("GetUser", new { id = user.Id }, user);
+            return Ok("User created");
         }
         catch (Exception e)
         {
@@ -96,7 +111,7 @@ public class UsersController : ControllerBase
                     return NotFound("User not found when updating: " + firebaseUserId);
                 }
 
-                // Add regex to ensure alphanumeric characters only, no profanity, etc.
+
                 if (user.Username != null)
                 {
 
@@ -175,7 +190,7 @@ public class UsersController : ControllerBase
         try
         {
             // Get all groups this user is a member of
-            Group[] groups = _context.Group.Include(g => g.GroupMembers).Where(g => g.GroupMembers.Any(gm => gm.MemberId == firebaseUserId)).ToArray();
+            Group[] groups = _context.Group.Include(g => g.GroupMembers).Where(g => g.GroupMembers.Any(gm => gm.MemberId == firebaseUserId && gm.Status == GroupMemberStatus.Joined)).ToArray();
 
 
             // Shape the response object
@@ -213,7 +228,7 @@ public class UsersController : ControllerBase
                             Status = gm.Status,
                             CreatedAt = gm.CreatedAt,
                             UpdatedAt = gm.UpdatedAt,
-                        })
+                        }).Where(gm => gm.Status == GroupMemberStatus.Joined)
                         .ToList()
                 };
 
@@ -232,10 +247,86 @@ public class UsersController : ControllerBase
     }
 
     /************************************************************************************************************
+    // api/v1/Users/groups/invites [GET] - Returns a list of group invites
+    ************************************************************************************************************/
+    [HttpGet("groups/invites", Name = "getInvitedGroups")]
+    public ActionResult<List<GetUserGroupsResponse>> GetInvitedGroups()
+    {
+        _logger.LogInformation("GetGroups() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+
+        try
+        {
+            // Get all groups this user is a member of
+            Group[] groups = _context.Group.Include(g => g.GroupMembers).Where(g => g.GroupMembers.Any(gm => gm.MemberId == firebaseUserId && gm.Status == GroupMemberStatus.Invited)).ToArray();
+
+
+            // Shape the response object
+            var userGroupsResponse = new List<GetUserGroupsResponse>();
+            foreach (var group in groups)
+            {
+                // Find creator of the group
+                var creator = _context.User.FirstOrDefault(u => u.Id == group.CreatedById);
+
+                GetUserGroupsResponse userGroup = new GetUserGroupsResponse()
+                {
+                    Id = group.Id,
+                    Name = group.Name,
+                    Description = group.Description,
+                    CreatedById = group.CreatedById,
+                    CreatedBy = new UserSummaryDTO()
+                    {
+                        Id = creator.Id,
+                        Username = creator.Username,
+                        FirstName = creator.FirstName,
+                        LastName = creator.LastName,
+                        CreatedAt = creator.CreatedAt,
+                        UpdatedAt = creator.UpdatedAt
+                    },
+                    CreatedAt = group.CreatedAt,
+                    UpdatedAt = group.UpdatedAt,
+                    GroupMembers = group.GroupMembers
+                        .Select(gm => new GetUserGroupsGroupMemberDTO()
+                        {
+                            Id = gm.Id,
+                            GroupId = gm.GroupId,
+                            MemberId = gm.MemberId,
+                            InvitedById = gm.InvitedById,
+                            IsAdmin = gm.IsAdmin,
+                            Status = gm.Status,
+                            CreatedAt = gm.CreatedAt,
+                            UpdatedAt = gm.UpdatedAt,
+                        }).Where(gm => gm.Status == GroupMemberStatus.Joined)
+                        .ToList()
+                };
+
+                // Add the DTO to the list
+                userGroupsResponse.Add(userGroup);
+            }
+
+            return userGroupsResponse;
+        }
+
+        catch (Exception e)
+        {
+            _logger.LogError("GetGroups() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
+
+
+
+    /************************************************************************************************************
     // api/v1/Users/{id}/delete [DELETE] - Deletes a user
     NOTE: THIS ROUTE IS USED MAINLY FOR UNIT TESTING PURPOSES OR FOR WHEN A USER WANTS TO DELETE THEIR OWN ACCOUNT
     MEANING THIS SHOULD BE VERY PROTECTED AND NOT EASILY ACCESSIBLE, DELETING A USER SHOULD CASCADE DELETE ALL
     ************************************************************************************************************/
+
     [HttpDelete("{id}/delete", Name = "DeleteUser")]
     public async Task<IActionResult> DeleteUser(string id)
     {
@@ -256,6 +347,12 @@ public class UsersController : ControllerBase
                 if (existingUser == null)
                 {
                     return NotFound("User not found when deleting: " + firebaseUserId);
+                }
+
+                // If user is the owner (createdById) of a group, do not allow deletion
+                if (_context.Group.Any(g => g.CreatedById == firebaseUserId))
+                {
+                    return StatusCode(403, "you cannot delete your account as a group owner. Transfer ownership to another user first");
                 }
 
                 // Delete the user from Firebase
@@ -293,7 +390,7 @@ public class UsersController : ControllerBase
         // Users can only view their own user record
         if (firebaseUserId != id)
         {
-            return StatusCode(403, "Forbidden");
+            return StatusCode(403, "can only view your own user record");
         }
 
         try
@@ -366,34 +463,47 @@ public class UsersController : ControllerBase
     }
 
     /************************************************************************************************************
-    // api/v1/Users [Get] - Retrieves a user's transactions
-    ************************************************************************************************************/
-    // [HttpGet("transactions", Name = "GetUserTransactions")]
-    // public ActionResult<List<Transaction>> GetUserTransactions()
-    // {
-    //     _logger.LogInformation("GetUserTransactions() called");
-    //     var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
-    //     if (firebaseUserId == null)
-    //     {
-    //         return StatusCode(403, "Forbidden");
-    //     }
+   // api/v1/Users/search [GET] - Searches for users to invite
+   ************************************************************************************************************/
+    [HttpGet("search", Name = "SearchUsers")]
+    public ActionResult<List<SearchUserResponseDTO>> SearchUsers(string query)
+    {
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Forbidden");
+        }
+        if (query.Length == 0)
+        {
+            return BadRequest("Query cannot be empty");
+        }
 
-    //     try
-    //     {
-    //         // Find all transaction details that include the user as recipient or payer
-    //         var transactions = _context.Transaction
-    //             .Include(t => t.TransactionDetails)
-    //             .Where(t => t.TransactionDetails.Any(td => td.PayerId == firebaseUserId || td.RecipientId == firebaseUserId))
-    //             .ToList();
-
+        try
+        {
+            _logger.LogInformation("SearchUsers() called with query: {0}", query);
 
 
-    //         return transactions;
-    //     }
-    //     catch (Exception e)
-    //     {
-    //         _logger.LogError("GetUserTransactions() failed with exception: {0}", e);
-    //         return StatusCode(500, $"Internal server error: {e.Message}");
-    //     }
-    // }
+            // Retrieve users from the database and perform email comparison in memory
+            var users = _context.User
+                .AsEnumerable() // Switch to client-side evaluation to use StringComparison.OrdinalIgnoreCase
+                .Where(u => u.Email.Equals(query, StringComparison.OrdinalIgnoreCase) || u.Username.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+                .Select(u => new SearchUserResponseDTO()
+                {
+                    Id = u.Id,
+                    Username = u.Username,
+                    FirstName = u.FirstName,
+                    LastName = u.LastName,
+                    CreatedAt = u.CreatedAt,
+                    UpdatedAt = u.UpdatedAt
+                })
+                .ToList();
+
+            return users;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("SearchUsers() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
 }

@@ -25,6 +25,15 @@ public class FirebaseAuthMiddleware
             }
         }
 
+        // if user is creating account, no need to check for token
+        // var routesWithoutToken = new[] { "/api/v1/Users/create" };
+        // if (routesWithoutToken.Any(path => context.Request.Path.Equals(path, StringComparison.OrdinalIgnoreCase)))
+        // {
+        //     logger.LogInformation("Path does not require authentication: {path}", context.Request.Path);
+        //     await _next(context);
+        //     return;
+        // }
+
         if (context.Request.Headers.TryGetValue("Authorization", out var authorizationHeader))
         {
             var bearerToken = authorizationHeader.FirstOrDefault()?.Split(" ").Last();
@@ -40,7 +49,7 @@ public class FirebaseAuthMiddleware
                 catch (FirebaseAuthException)
                 {
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    await context.Response.WriteAsync("No valid token provided");
+                    await context.Response.WriteAsync("Token provided is invalid");
                     return;
                 }
             }

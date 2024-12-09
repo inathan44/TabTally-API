@@ -25,6 +25,18 @@ namespace Splyt
             {
                 options.UseNpgsql(Environment.GetEnvironmentVariable("DATABASE_URL"));
             });
+
+            services.AddCors(options =>
+            {
+                options.AddPolicy("AllowSpecificOrigins",
+                    builder =>
+                    {
+                        builder.WithOrigins("http://localhost:3000")
+                               .AllowAnyHeader()
+                               .AllowAnyMethod();
+                    });
+            });
+
             string? pathToFirebaseAdminSDKJson = Environment.GetEnvironmentVariable("PATH_TO_FIREBASE_JSON");
             if (pathToFirebaseAdminSDKJson == null)
             {
@@ -45,10 +57,12 @@ namespace Splyt
             }
             app.UseHttpsRedirection();
             app.UseRouting();
+
+            app.UseCors("AllowSpecificOrigins");
+
             app.UseAuthorization();
 
             app.UseMiddleware<FirebaseAuthMiddleware>();
-            app.UseMiddleware<FindOrCreateUserMiddleware>();
 
             app.UseEndpoints(endpoints =>
             {
