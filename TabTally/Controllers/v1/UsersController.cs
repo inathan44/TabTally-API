@@ -199,6 +199,7 @@ public class UsersController : ControllerBase
             {
                 // Find creator of the group
                 var creator = _context.User.FirstOrDefault(u => u.Id == group.CreatedById);
+                Transaction[] transactions = _context.Transaction.Include(t => t.Group).Where(g => g.GroupId == group.Id).ToArray();
 
                 GetUserGroupsResponse userGroup = new GetUserGroupsResponse()
                 {
@@ -229,7 +230,7 @@ public class UsersController : ControllerBase
                             CreatedAt = gm.CreatedAt,
                             UpdatedAt = gm.UpdatedAt,
                         }).Where(gm => gm.Status == GroupMemberStatus.Joined)
-                        .ToList()
+                        .ToList(),
                 };
 
                 // Add the DTO to the list
