@@ -32,6 +32,7 @@ public class FindOrCreateUserMiddleware
                             };
                             dbContext.User.Add(user);
                             await dbContext.SaveChangesAsync();
+                            logger.LogInformation("Find or create ran on: {userId}", user.Id);
                         }
                         httpContext.Items.Add("User", user);
                         await _next(httpContext);
