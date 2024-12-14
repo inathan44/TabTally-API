@@ -199,6 +199,8 @@ public class TransactionsController : ControllerBase
     {
         ICollection<string> invalidProperties = new List<string>();
 
+        _logger.LogInformation("CreateTransaction() called");
+
         var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
         if (firebaseUserId == null)
         {
