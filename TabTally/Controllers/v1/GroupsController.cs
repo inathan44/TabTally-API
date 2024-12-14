@@ -236,7 +236,6 @@ public class GroupsController : ControllerBase
                 return StatusCode(403, "Forbidden: You must be a member of the group to view it");
             }
 
-            _logger.LogInformation("Group found: {0}", group.Name);
 
             // Get the group members
             List<GetGroupGroupMemberDTO> groupMembersResponse = new List<GetGroupGroupMemberDTO>();
@@ -245,7 +244,6 @@ public class GroupsController : ControllerBase
                 .Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined)
                 .ToList();
 
-            _logger.LogInformation("Group members found: {0}", groupMembers.Count);
 
             foreach (var member in groupMembers)
             {
@@ -280,7 +278,6 @@ public class GroupsController : ControllerBase
                 .Include(t => t.TransactionDetails)
                 .ToList();
 
-            _logger.LogInformation("Transactions found: {0}", transactions.Count);
 
             List<TransactionSummaryDTO> transactionsResponse = new List<TransactionSummaryDTO>(
                 transactions.Select(t => new TransactionSummaryDTO
@@ -820,7 +817,7 @@ public class GroupsController : ControllerBase
     api/v1/groups/{groupId}/members [GET]
     *****************************************************************************************************************************/
     [HttpGet("{groupId}/members", Name = "GetGroupMembers")]
-    public ActionResult<List<GroupMember>> GetGroupMembers(int groupId)
+    public ActionResult<List<GroupMemberSummaryDTO>> GetGroupMembers(int groupId)
     {
         _logger.LogInformation("GetGroupMembers() called");
         var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
@@ -838,16 +835,50 @@ public class GroupsController : ControllerBase
             }
 
             // Check if the user is a member of the group
-            GroupMember? groupMember = _context.GroupMember.Find(groupId, firebaseUserId);
+            GroupMember? groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
             if (groupMember == null || groupMember.Status != GroupMemberStatus.Joined)
             {
                 return StatusCode(403, "Forbidden: You must be a member of the group to view its members");
             }
 
             // Get the group members
-            List<GroupMember> groupMembers = _context.GroupMember.Where(gm => gm.GroupId == groupId).Include(gm => gm.Member).ToList();
+            List<GroupMember> groupMembers = _context.GroupMember
+                .Where(gm => gm.GroupId == groupId && gm.Status == GroupMemberStatus.Joined)
+                .Include(gm => gm.Member)
+                .ToList();
 
-            return groupMembers;
+            // Map GroupMember to GroupMemberSummaryDTO
+            List<GroupMemberSummaryDTO> groupMemberSummaryDTOs = groupMembers.Select(gm => new GroupMemberSummaryDTO
+            {
+                Id = gm.Id,
+                MemberId = gm.MemberId,
+                InvitedById = gm.InvitedById,
+                IsAdmin = gm.IsAdmin,
+                Status = gm.Status,
+                CreatedAt = gm.CreatedAt,
+                UpdatedAt = gm.UpdatedAt,
+                Member = new UserSummaryDTO
+                {
+                    Id = gm.Member.Id,
+                    FirstName = gm.Member.FirstName,
+                    LastName = gm.Member.LastName,
+                    Username = gm.Member.Username,
+                    CreatedAt = gm.Member.CreatedAt,
+                    UpdatedAt = gm.Member.UpdatedAt
+                },
+                InvitedBy = new UserSummaryDTO
+                {
+                    Id = gm.InvitedBy.Id,
+                    FirstName = gm.InvitedBy.FirstName,
+                    LastName = gm.InvitedBy.LastName,
+                    Username = gm.InvitedBy.Username,
+                    CreatedAt = gm.InvitedBy.CreatedAt,
+                    UpdatedAt = gm.InvitedBy.UpdatedAt
+                }
+
+            }).ToList();
+
+            return groupMemberSummaryDTOs;
         }
         catch (Exception e)
         {
@@ -1227,6 +1258,44 @@ public class GroupsController : ControllerBase
 
 
 
+    }
+
+    /*****************************************************************************************************************************
+    Check if user is member of a group
+    api/v1/groups/{groupId}/ismember [GET]
+    *****************************************************************************************************************************/
+    [HttpGet("{groupId}/ismember", Name = "IsMember")]
+    public ActionResult IsMember(int groupId)
+    {
+        _logger.LogInformation("IsMember() called");
+        var firebaseUserId = HttpContext.Items["FirebaseUserId"] as string;
+        if (firebaseUserId == null)
+        {
+            return StatusCode(403, "Must be logged in to check if user is a member of a group");
+        }
+        try
+        {
+            // Find the group
+            Group? group = _context.Group.Find(groupId);
+            if (group == null)
+            {
+                return NotFound("Group not found");
+            }
+
+            // Check if the user is a member of the group
+            GroupMember? groupMember = _context.GroupMember.FirstOrDefault(gm => gm.GroupId == groupId && gm.MemberId == firebaseUserId);
+            if (groupMember == null)
+            {
+                return Ok(false);
+            }
+
+            return Ok(true);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("IsMember() failed with exception: {0}", e);
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
     }
 
 }
